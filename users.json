@@ -1,0 +1,34 @@
+{
+    "8114779182": {
+        "name": "Admin",
+        "balance": 0,
+        "referred_by": null,
+        "status": "Paid",
+        "referrals": 0,
+        "lang": "en"
+    },
+    "8216845039": {
+        "name": "Eleven",
+        "balance": 400,
+        "referred_by": null,
+        "status": "Paid",
+        "referrals": 2,
+        "lang": "en"
+    },
+    "7261208220": {
+        "name": "Sonu Kumar",
+        "balance": 0,
+        "referred_by": "8216845039",
+        "status": "Paid",
+        "referrals": 0,
+        "lang": "en"
+    },
+    "1246395434": {
+        "name": "Razz",
+        "balance": 0,
+        "referred_by": "8216845039",
+        "status": "Paid",
+        "referrals": 0,
+        "lang": "hi"
+    }
+}
