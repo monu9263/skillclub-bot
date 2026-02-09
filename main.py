@@ -6,8 +6,12 @@ from flask import Flask
 from threading import Thread
 
 # --- 1. कॉन्फ़िगरेशन ---
-API_TOKEN = '8233876064:AAGbRLwMZAvbuaxT6pziyc84QAJM3HKlne0'
-ADMIN_ID = '8114779182'
+import os
+import telebot
+
+# पुरानी टोकन वाली लाइन को हटाकर ये 3 लाइनें लिखें:
+API_TOKEN = os.getenv('API_TOKEN')
+ADMIN_ID = os.getenv('ADMIN_ID')
 bot = telebot.TeleBot(API_TOKEN)
 DB_FILE = 'users.json'
 COURSE_LINK = "https://drive.google.com/drive/folders/1b2BchlaXprjfro5DB7i7cBN5Jp5Xq_80"
