@@ -21,25 +21,29 @@ STRINGS = {
         "welcome": "नमस्ते {name}! <b>Skillclub</b> में स्वागत है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n👥 <b>रेफरल:</b> {refs}",
         "buy_menu": "🎓 <b>हमारे उपलब्ध कोर्सेस चुनें:</b>",
+        "no_courses": "❌ अभी कोई कोर्स उपलब्ध नहीं है।",
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\n1. UPI: <code>{upi}</code> पर पेमेंट करें।\n2. स्क्रीनशॉट इसी बोट में भेजें।",
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
         "invite": "🔥 <b>आपका इनवाइट लिंक:</b>\n{link}",
-        "wd_request_sent": "✅ <b>रिक्वेस्ट भेज दी गई है!</b>\nएडमिन वेरिफिकेशन के बाद पेमेंट मिल जाएगा।",
-        "wd_completed": "🥳 <b>Payout Successful!</b>\nआपका ₹{amt} का पेमेंट कर दिया गया है।",
-        "wd_cancelled": "❌ <b>Payout Cancelled!</b>\nआपकी विड्रॉल रिक्वेस्ट रिजेक्ट कर दी गई है।",
-        "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "⚙️ सेटिंग्स"]
+        "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
+        "wd_request_sent": "✅ <b>रिक्वेस्ट भेज दी गई है!</b>\nपेमेंट का इंतज़ार करें।",
+        "wd_completed": "🥳 <b>Payout Successful!</b>\nआपका ₹{amt} भेज दिया गया है।",
+        "wd_cancelled": "❌ <b>Payout Cancelled!</b>\nआपकी रिक्वेस्ट रिजेक्ट हो गई है।",
+        "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "⚙️ सेटिंग्स"]
     },
     "en": {
         "welcome": "Hello {name}! Welcome to <b>Skillclub</b>.",
         "profile": "👤 <b>Name:</b> {name}\n🏆 <b>Status:</b> {status}\n👥 <b>Referrals:</b> {refs}",
         "buy_menu": "🎓 <b>Choose from our available courses:</b>",
+        "no_courses": "❌ No courses available.",
         "payment_instruction": "🚀 <b>Course:</b> {cname}\n💰 <b>Price:</b> ₹{price}\n\n1. Send payment to UPI: <code>{upi}</code>\n2. Send screenshot here.",
         "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}\n📉 Min. Withdrawal: ₹500",
         "invite": "🔥 <b>Your Invite Link:</b>\n{link}",
-        "wd_request_sent": "✅ <b>Request Sent!</b>\nAdmin will verify and pay soon.",
-        "wd_completed": "🥳 <b>Payout Successful!</b>\nYour payment of ₹{amt} has been processed.",
+        "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
+        "wd_request_sent": "✅ <b>Request Sent!</b>\nAdmin will verify soon.",
+        "wd_completed": "🥳 <b>Payout Successful!</b>\nYour payment of ₹{amt} is done.",
         "wd_cancelled": "❌ <b>Payout Cancelled!</b>\nYour request has been rejected.",
-        "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "⚙️ Settings"]
+        "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "🏆 Leaderboard", "⚙️ Settings"]
     }
 }
 
@@ -75,7 +79,29 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# --- 5. एडमिन कोर्स मैनेजमेंट ---
+# --- 5. एडमिन पैनल फंक्शनलिटी (Stats & Search) ---
+def get_admin_menu():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("📊 Stats", "👤 Search User")
+    markup.add("📢 Broadcast", "➕ Add Course")
+    markup.add("🔙 Back to Main Menu")
+    return markup
+
+def get_stats(): #
+    data = load_data()
+    courses = load_courses()
+    total_users = len(data)
+    total_bal = sum(u.get('balance', 0) for u in data.values())
+    paid_users = sum(1 for u in data.values() if "Paid" in u.get('status', ''))
+    
+    stats_text = (f"📊 <b>Skillclub Real-time Stats</b>\n\n"
+                  f"👥 <b>Total Users:</b> {total_users}\n"
+                  f"✅ <b>Paid Users:</b> {paid_users}\n"
+                  f"💰 <b>Total Wallet Balance:</b> ₹{total_bal}\n"
+                  f"📚 <b>Total Courses:</b> {len(courses)}")
+    return stats_text
+
+# --- 6. एडमिन कोर्स मैनेजमेंट ---
 @bot.message_handler(commands=['addcourse'])
 def add_course_start(message):
     if str(message.chat.id) == ADMIN_ID:
@@ -109,9 +135,9 @@ def finalize_course(message, c_name, c_price, l1_comm, l2_comm):
         courses[c_id] = {"name": c_name, "price": int(re.sub(r'\D', '', c_price)), "l1": int(re.sub(r'\D', '', l1_comm)), "l2": int(re.sub(r'\D', '', l2_comm)), "link": message.text}
         save_courses(courses)
         bot.send_message(message.chat.id, f"✅ <b>कोर्स जुड़ गया!</b> ID: <code>{c_id}</code>", parse_mode="HTML")
-    except: bot.send_message(message.chat.id, "❌ एरर: सिर्फ नंबर लिखें।")
+    except: bot.send_message(message.chat.id, "❌ Error: सिर्फ नंबर का उपयोग करें।")
 
-# --- 6. कॉलकैब हैंडलर (Approval, Withdrawal, Broadcast) ---
+# --- 7. मुख्य कॉलकैब हैंडलर ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
     data = load_data()
@@ -136,7 +162,7 @@ def callbacks(call):
             if cid not in data[t_id]["purchased"]:
                 data[t_id]["purchased"].append(cid)
                 data[t_id]["status"] = "Paid"
-                # कमीशन लॉजिक (L1 & L2)
+                # कमीशन लॉजिक
                 l1_id = data[t_id].get("referred_by")
                 if l1_id and l1_id in data:
                     data[l1_id]["balance"] += course.get("l1", 0)
@@ -158,21 +184,21 @@ def callbacks(call):
         msg = bot.send_message(uid, "📝 <b>अपनी UPI ID भेजें:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_withdrawal, data[uid]["balance"])
 
-    elif action == "wdpay": #
+    elif action == "wdpay":
         t_id, amt = call.data.split('_')[1], int(call.data.split('_')[2])
         if t_id in data:
             data[t_id]["balance"] -= amt
             save_data(data)
             bot.send_message(t_id, STRINGS[data[t_id].get("lang", "hi")]["wd_completed"].format(amt=amt), parse_mode="HTML")
-            bot.edit_message_caption(f"✅ <b>PAYOUT DONE</b>\nAmt: ₹{amt}", ADMIN_ID, call.message.message_id, parse_mode="HTML")
+            bot.edit_message_caption(f"✅ <b>PAYOUT DONE</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
 
-    elif action == "wdrej": #
+    elif action == "wdrej":
         t_id = call.data.split('_')[1]
         if t_id in data:
             bot.send_message(t_id, STRINGS[data[t_id].get("lang", "hi")]["wd_cancelled"], parse_mode="HTML")
             bot.edit_message_caption(f"❌ <b>PAYOUT CANCELLED</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
 
-# --- 7. विड्रॉल और ब्रॉडकास्ट प्रोसेस ---
+# --- 8. विड्रॉल, ब्रॉडकास्ट और सर्च लॉजिक ---
 def process_withdrawal(message, amt):
     uid, upi_id = str(message.chat.id), message.text
     markup = types.InlineKeyboardMarkup()
@@ -181,10 +207,10 @@ def process_withdrawal(message, amt):
     bot.send_message(ADMIN_ID, f"🔔 <b>विड्रॉल रिक्वेस्ट!</b>\nAmt: ₹{amt}\nUPI: <code>{upi_id}</code>", reply_markup=markup, parse_mode="HTML")
     bot.send_message(uid, STRINGS["hi"]["wd_request_sent"], parse_mode="HTML")
 
-@bot.message_handler(commands=['broadcast']) #
+@bot.message_handler(commands=['broadcast'])
 def start_broadcast(message):
     if str(message.chat.id) == ADMIN_ID:
-        msg = bot.send_message(ADMIN_ID, "📢 <b>संदेश भेजें (टेक्स्ट या फोटो):</b>\nसबको भेजने के लिए तैयार रहें।", parse_mode="HTML")
+        msg = bot.send_message(ADMIN_ID, "📢 संदेश भेजें (टेक्स्ट या फोटो):", parse_mode="HTML")
         bot.register_next_step_handler(msg, send_broadcast)
 
 def send_broadcast(message):
@@ -198,9 +224,25 @@ def send_broadcast(message):
                 bot.send_photo(uid, message.photo[-1].file_id, caption=f"📢 <b>ANNOUNCEMENT:</b>\n\n{message.caption if message.caption else ''}", parse_mode="HTML")
             count += 1
         except: continue
-    bot.send_message(ADMIN_ID, f"✅ संदेश {count} यूजर्स को भेज दिया गया है।")
+    bot.send_message(ADMIN_ID, f"✅ {count} यूजर्स को भेज दिया गया।")
 
-# --- 8. मेनू और फोटो हैंडलर ---
+def process_user_search(message): #
+    data = load_data()
+    search_id = message.text.strip()
+    if search_id in data:
+        u = data[search_id]
+        purchased = ", ".join(u.get('purchased', [])) if u.get('purchased') else "None"
+        info = (f"👤 <b>User Info:</b> {u['name']}\n"
+                f"🆔 <b>ID:</b> <code>{search_id}</code>\n"
+                f"💰 <b>Balance:</b> ₹{u['balance']}\n"
+                f"👥 <b>Referrals:</b> {u.get('referrals', 0)}\n"
+                f"🏆 <b>Status:</b> {u['status']}\n"
+                f"📚 <b>Courses:</b> {purchased}")
+        bot.send_message(ADMIN_ID, info, parse_mode="HTML")
+    else:
+        bot.send_message(ADMIN_ID, "❌ यूजर नहीं मिला।")
+
+# --- 9. मेनू और फोटो हैंडलर ---
 @bot.message_handler(func=lambda m: True)
 def handle_menu(message):
     data = load_data()
@@ -209,7 +251,28 @@ def handle_menu(message):
     lang = data[uid].get("lang", "hi")
     text = message.text
 
-    if text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
+    # --- Admin Panel Logic ---
+    if text == "🛠 Admin Panel" and uid == ADMIN_ID:
+        bot.send_message(uid, "🛠 <b>Welcome to Admin Control:</b>", reply_markup=get_admin_menu(), parse_mode="HTML")
+
+    elif text == "📊 Stats" and uid == ADMIN_ID:
+        bot.send_message(uid, get_stats(), parse_mode="HTML")
+
+    elif text == "👤 Search User" and uid == ADMIN_ID:
+        msg = bot.send_message(uid, "🔍 <b>यूजर की Telegram ID भेजें:</b>", parse_mode="HTML")
+        bot.register_next_step_handler(msg, process_user_search)
+
+    elif text == "📢 Broadcast" and uid == ADMIN_ID:
+        start_broadcast(message)
+
+    elif text == "➕ Add Course" and uid == ADMIN_ID:
+        add_course_start(message)
+
+    elif text == "🔙 Back to Main Menu":
+        bot.send_message(uid, "🔙 मुख्य मेनू पर वापस।", reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
+
+    # --- User Menu Logic ---
+    elif text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
         courses = load_courses()
         purchased_list = data[uid].get("purchased", [])
         markup = types.InlineKeyboardMarkup()
@@ -217,6 +280,13 @@ def handle_menu(message):
             if cid in purchased_list: markup.add(types.InlineKeyboardButton(f"📥 Download {info['name']}", url=info['link']))
             else: markup.add(types.InlineKeyboardButton(f"🛒 {info['name']} - ₹{info['price']}", callback_data=f"buyinfo_{cid}"))
         bot.send_message(uid, STRINGS[lang]["buy_menu"], reply_markup=markup, parse_mode="HTML")
+
+    elif text in ["🏆 लीडरबोर्ड", "🏆 Leaderboard"]:
+        sorted_users = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)
+        leader_text = STRINGS[lang]["leaderboard_header"]
+        for i, (u_id, u_data) in enumerate(sorted_users[:10], 1):
+            leader_text += f"{i}. {u_data.get('name', 'User')} — {u_data.get('referrals', 0)} रेफरल्स\n"
+        bot.send_message(uid, leader_text, parse_mode="HTML")
 
     elif text in ["💰 वॉलेट", "💰 Wallet"]:
         bal = data[uid].get('balance', 0)
@@ -253,14 +323,18 @@ def start(message):
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref_id, "status": "Free", "referrals": 0, "lang": "hi", "purchased": []}
         save_data(data)
     lang = data[uid].get("lang", "hi")
+    bot.send_message(uid, STRINGS[lang]["welcome"].format(name=message.from_user.first_name), reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
+
+def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
     markup.add(b[0], b[1])
     markup.add(b[2], b[3])
-    markup.add(b[4])
-    bot.send_message(uid, STRINGS[lang]["welcome"].format(name=message.from_user.first_name), reply_markup=markup, parse_mode="HTML")
+    markup.add(b[4], b[5])
+    if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
+    return markup
 
 if __name__ == "__main__":
     keep_alive()
     bot.polling(none_stop=True)
-    
+        
