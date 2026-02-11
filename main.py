@@ -13,7 +13,7 @@ ADMIN_ID = os.getenv('ADMIN_ID')
 bot = telebot.TeleBot(API_TOKEN)
 DB_FILE = 'users.json'
 COURSE_DB = 'courses.json'
-ADMIN_UPI = "anand1312@fam" # अपनी UPI ID यहाँ बदलें
+ADMIN_UPI = "anand1312@fam" # अपनी UPI ID
 
 # --- 2. भाषा और मैसेज (HTML Mode) ---
 STRINGS = {
@@ -24,7 +24,7 @@ STRINGS = {
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\n1. UPI: <code>{upi}</code> पर पेमेंट करें।\n2. स्क्रीनशॉट इसी बोट में भेजें।",
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
         "invite": "🔥 <b>आपका इनवाइट लिंक:</b>\n{link}",
-        "wd_request_sent": "✅ <b>रिक्वेस्ट भेज दी गई है!</b>\nएडमिन वेरिफिकेशन के बाद आपको पेमेंट मिल जाएगा।",
+        "wd_request_sent": "✅ <b>रिक्वेस्ट भेज दी गई है!</b>\nएडमिन वेरिफिकेशन के बाद पेमेंट मिल जाएगा।",
         "wd_completed": "🥳 <b>Payout Successful!</b>\nआपका ₹{amt} का पेमेंट कर दिया गया है।",
         "wd_cancelled": "❌ <b>Payout Cancelled!</b>\nआपकी विड्रॉल रिक्वेस्ट रिजेक्ट कर दी गई है।",
         "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "⚙️ सेटिंग्स"]
@@ -103,20 +103,15 @@ def process_course_l2(message, c_name, c_price, l1_comm):
     bot.register_next_step_handler(msg, finalize_course, c_name, c_price, l1_comm, l2_comm)
 
 def finalize_course(message, c_name, c_price, l1_comm, l2_comm):
-    c_link = message.text
-    courses = load_courses()
-    c_id = c_name.lower().replace(" ", "_")
     try:
-        clean_price = int(re.sub(r'\D', '', c_price)) #
-        clean_l1 = int(re.sub(r'\D', '', l1_comm))
-        clean_l2 = int(re.sub(r'\D', '', l2_comm))
-        courses[c_id] = {"name": c_name, "price": clean_price, "l1": clean_l1, "l2": clean_l2, "link": c_link}
+        courses = load_courses()
+        c_id = c_name.lower().replace(" ", "_")
+        courses[c_id] = {"name": c_name, "price": int(re.sub(r'\D', '', c_price)), "l1": int(re.sub(r'\D', '', l1_comm)), "l2": int(re.sub(r'\D', '', l2_comm)), "link": message.text}
         save_courses(courses)
         bot.send_message(message.chat.id, f"✅ <b>कोर्स जुड़ गया!</b> ID: <code>{c_id}</code>", parse_mode="HTML")
-    except:
-        bot.send_message(message.chat.id, "❌ एरर: सिर्फ नंबर लिखें।")
+    except: bot.send_message(message.chat.id, "❌ एरर: सिर्फ नंबर लिखें।")
 
-# --- 6. कॉलकैब और विड्रॉल लॉजिक ---
+# --- 6. कॉलकैब हैंडलर (Approval, Withdrawal, Broadcast) ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
     data = load_data()
@@ -130,8 +125,7 @@ def callbacks(call):
         if cid in courses:
             data[uid]["pending_buy"] = cid
             save_data(data)
-            lang = data[uid].get("lang", "hi")
-            bot.send_message(uid, STRINGS[lang]["payment_instruction"].format(cname=courses[cid]['name'], price=courses[cid]['price'], upi=ADMIN_UPI), parse_mode="HTML")
+            bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=courses[cid]['name'], price=courses[cid]['price'], upi=ADMIN_UPI), parse_mode="HTML")
 
     elif action == "app":
         app_parts = call.data.split('_')
@@ -142,7 +136,7 @@ def callbacks(call):
             if cid not in data[t_id]["purchased"]:
                 data[t_id]["purchased"].append(cid)
                 data[t_id]["status"] = "Paid"
-                # कमीशन लॉजिक
+                # कमीशन लॉजिक (L1 & L2)
                 l1_id = data[t_id].get("referred_by")
                 if l1_id and l1_id in data:
                     data[l1_id]["balance"] += course.get("l1", 0)
@@ -157,14 +151,14 @@ def callbacks(call):
             save_data(data)
             markup = types.InlineKeyboardMarkup()
             markup.add(types.InlineKeyboardButton("📥 डाउनलोड करें", url=course['link']))
-            bot.send_message(t_id, f"🥳 <b>मुबारक हो!</b> पेमेंट अप्रूव हो गया है।", reply_markup=markup, parse_mode="HTML")
+            bot.send_message(t_id, f"🥳 <b>पेमेंट अप्रूव हो गया है!</b>", reply_markup=markup, parse_mode="HTML")
             bot.edit_message_caption(f"✅ APPROVED: {course['name']}", ADMIN_ID, call.message.message_id, parse_mode="HTML")
 
-    elif action == "ask_wd": #
+    elif action == "ask_wd":
         msg = bot.send_message(uid, "📝 <b>अपनी UPI ID भेजें:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_withdrawal, data[uid]["balance"])
 
-    elif action == "wdpay": # Payout Complete
+    elif action == "wdpay": #
         t_id, amt = call.data.split('_')[1], int(call.data.split('_')[2])
         if t_id in data:
             data[t_id]["balance"] -= amt
@@ -172,26 +166,46 @@ def callbacks(call):
             bot.send_message(t_id, STRINGS[data[t_id].get("lang", "hi")]["wd_completed"].format(amt=amt), parse_mode="HTML")
             bot.edit_message_caption(f"✅ <b>PAYOUT DONE</b>\nAmt: ₹{amt}", ADMIN_ID, call.message.message_id, parse_mode="HTML")
 
-    elif action == "wdrej": # Payout Cancel
+    elif action == "wdrej": #
         t_id = call.data.split('_')[1]
         if t_id in data:
             bot.send_message(t_id, STRINGS[data[t_id].get("lang", "hi")]["wd_cancelled"], parse_mode="HTML")
             bot.edit_message_caption(f"❌ <b>PAYOUT CANCELLED</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
 
-# --- 7. विड्रॉल प्रोसेस ---
+# --- 7. विड्रॉल और ब्रॉडकास्ट प्रोसेस ---
 def process_withdrawal(message, amt):
     uid, upi_id = str(message.chat.id), message.text
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("✅ Payout Complete", callback_data=f"wdpay_{uid}_{amt}"),
                types.InlineKeyboardButton("❌ Cancel", callback_data=f"wdrej_{uid}"))
-    bot.send_message(ADMIN_ID, f"🔔 <b>विड्रॉल रिक्वेस्ट!</b>\nयूजर: {message.from_user.first_name}\nID: <code>{uid}</code>\nAmt: ₹{amt}\nUPI: <code>{upi_id}</code>", reply_markup=markup, parse_mode="HTML")
+    bot.send_message(ADMIN_ID, f"🔔 <b>विड्रॉल रिक्वेस्ट!</b>\nAmt: ₹{amt}\nUPI: <code>{upi_id}</code>", reply_markup=markup, parse_mode="HTML")
     bot.send_message(uid, STRINGS["hi"]["wd_request_sent"], parse_mode="HTML")
+
+@bot.message_handler(commands=['broadcast']) #
+def start_broadcast(message):
+    if str(message.chat.id) == ADMIN_ID:
+        msg = bot.send_message(ADMIN_ID, "📢 <b>संदेश भेजें (टेक्स्ट या फोटो):</b>\nसबको भेजने के लिए तैयार रहें।", parse_mode="HTML")
+        bot.register_next_step_handler(msg, send_broadcast)
+
+def send_broadcast(message):
+    data = load_data()
+    count = 0
+    for uid in data.keys():
+        try:
+            if message.content_type == 'text':
+                bot.send_message(uid, f"📢 <b>ANNOUNCEMENT:</b>\n\n{message.text}", parse_mode="HTML")
+            elif message.content_type == 'photo':
+                bot.send_photo(uid, message.photo[-1].file_id, caption=f"📢 <b>ANNOUNCEMENT:</b>\n\n{message.caption if message.caption else ''}", parse_mode="HTML")
+            count += 1
+        except: continue
+    bot.send_message(ADMIN_ID, f"✅ संदेश {count} यूजर्स को भेज दिया गया है।")
 
 # --- 8. मेनू और फोटो हैंडलर ---
 @bot.message_handler(func=lambda m: True)
 def handle_menu(message):
     data = load_data()
     uid = str(message.chat.id)
+    if uid not in data: return
     lang = data[uid].get("lang", "hi")
     text = message.text
 
@@ -219,16 +233,15 @@ def handle_menu(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    uid = str(message.chat.id)
-    data = load_data()
+    uid, data = str(message.chat.id), load_data()
     pending_cid = data[uid].get("pending_buy")
     if pending_cid:
         courses = load_courses()
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
                    types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>नया पेमेंट!</b>\nकोर्स: {courses[pending_cid]['name']}", reply_markup=markup, parse_mode="HTML")
-        bot.send_message(uid, "✅ स्क्रीनशॉट मिल गया! इंतज़ार करें।")
+        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>नया पेमेंट!</b>\nID: <code>{uid}</code>\nकोर्स: {courses[pending_cid]['name']}", reply_markup=markup, parse_mode="HTML")
+        bot.send_message(uid, "✅ स्क्रीनशॉट मिल गया! अप्रूवल का इंतज़ार करें।")
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -239,17 +252,15 @@ def start(message):
         ref_id = args[1] if len(args) > 1 else None
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref_id, "status": "Free", "referrals": 0, "lang": "hi", "purchased": []}
         save_data(data)
-    bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["welcome"].format(name=message.from_user.first_name), reply_markup=get_menu(uid, data[uid].get("lang", "hi")), parse_mode="HTML")
-
-def get_menu(uid, lang):
+    lang = data[uid].get("lang", "hi")
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
     markup.add(b[0], b[1])
     markup.add(b[2], b[3])
     markup.add(b[4])
-    if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
-    return markup
+    bot.send_message(uid, STRINGS[lang]["welcome"].format(name=message.from_user.first_name), reply_markup=markup, parse_mode="HTML")
 
 if __name__ == "__main__":
     keep_alive()
     bot.polling(none_stop=True)
+    
