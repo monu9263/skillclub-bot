@@ -1,193 +1,192 @@
-import telebot  # 'i' को छोटा किया गया है
-from telebot import types
-import json
 import os
+import telebot
+import json
+import time
+import datetime
+import random
 from flask import Flask
 from threading import Thread
 
-# --- 1. कॉन्फ़िगरेशन ---
-import os
-import telebot
-
-# पुरानी टोकन वाली लाइन को हटाकर ये 3 लाइनें लिखें:
+# 1. कॉन्फ़िगरेशन और एनवायरनमेंट वेरिएबल्स
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = os.getenv('ADMIN_ID')
 bot = telebot.TeleBot(API_TOKEN)
-DB_FILE = 'users.json'
-COURSE_LINK = "https://drive.google.com/drive/folders/1b2BchlaXprjfro5DB7i7cBN5Jp5Xq_80"
+app = Flask('')
 
-# --- 2. भाषा और मैसेज (HTML Mode) ---
-STRINGS = {
-    "hi": {
-        "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है।",
-        "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n👥 <b>कुल रेफरल:</b> {refs}",
-        "buy": "🚀 <b>कोर्स पेमेंट प्रक्रिया:</b>\n\n1. UPI: <code>anand1312@fam</code> पर ₹300 भेजें।\n2. स्क्रीनशॉट इसी बोट में भेजें।",
-        "download": "✅ <b>आपका कोर्स तैयार है!</b>\nनीचे बटन दबाकर एक्सेस करें।",
-        "download_btn": "📥 कोर्स डाउनलोड करें",
-        "success_msg": "🥳 <b>मुबारक हो!</b> आपका पेमेंट अप्रूव हो गया है। नीचे बटन दबाकर कोर्स डाउनलोड करें।",
-        "wallet": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
-        "invite": "🔥 <b>आपका इनवाइट लिंक:</b>\n{link}",
-        "not_paid": "❌ पहले कोर्स खरीदें।",
-        "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "⚙️ सेटिंग्स"]
-    },
-    "en": {
-        "welcome": "Hello {name}! Welcome to <b>Skillclub</b>.",
-        "profile": "👤 <b>Name:</b> {name}\n🏆 <b>Status:</b> {status}\n👥 <b>Referrals:</b> {refs}",
-        "buy": "🚀 <b>Payment:</b> \n1. Send ₹300 to UPI: <code>anand1312@fam</code>.\n2. Send screenshot here.",
-        "download": "✅ <b>Your Course is Ready!</b>\nClick below to access.",
-        "download_btn": "📥 Download Course",
-        "success_msg": "🥳 <b>Success!</b> Payment approved. Click below to download.",
-        "wallet": "💰 <b>Wallet Balance:</b> ₹{bal}\n📉 Min. Withdrawal: ₹500",
-        "invite": "🔥 <b>Your Invite Link:</b>\n{link}",
-        "not_paid": "❌ Purchase course first.",
-        "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "⚙️ Settings"]
-    }
+# 2. मल्टी-कोर्स डेटाबेस (नाम, कीमत और कमीशन)
+COURSES = {
+    "ai_basic": {"name": "AI Influencer Basic", "price": 499, "commission": 200},
+    "marketing_pro": {"name": "Advanced Marketing", "price": 999, "commission": 450},
+    "masterclass": {"name": "Masterclass Tier 1", "price": 2499, "commission": 1000}
 }
 
-# --- 3. डेटा मैनेजर ---
+# 3. डेटाबेस हेल्पर्स (JSON फाइल मैनेजमेंट)
 def load_data():
-    if not os.path.exists(DB_FILE):
-        with open(DB_FILE, 'w') as f: json.dump({}, f)
+    if not os.path.exists('users.json'):
         return {}
-    try:
-        with open(DB_FILE, 'r') as f: return json.load(f)
-    except: return {}
+    with open('users.json', 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 def save_data(data):
-    with open(DB_FILE, 'w') as f: json.dump(data, f, indent=4)
+    with open('users.json', 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
-# --- 4. वेब सर्वर (24/7) ---
-app = Flask('')
+# 4. इनवॉइस जनरेट करने का फंक्शन
+def send_invoice(user_id, course_id, amount):
+    users = load_data()
+    user_data = users.get(str(user_id))
+    course = COURSES.get(course_id)
+    
+    if not user_data or not course:
+        return
+    
+    invoice_no = f"SKL-{datetime.datetime.now().strftime('%Y%m%d')}-{random.randint(100, 999)}"
+    date = datetime.datetime.now().strftime("%d-%m-%Y %H:%M")
+    
+    invoice_text = (
+        f"📄 **OFFICIAL INVOICE: {course['name']}**\n"
+        f"------------------------------------------\n"
+        f"**Invoice No:** `{invoice_no}`\n"
+        f"**Date:** {date}\n"
+        f"**Customer Name:** {user_data.get('name')}\n"
+        f"**User ID:** `{user_id}`\n"
+        f"------------------------------------------\n"
+        f"**Course:** {course['name']}\n"
+        f"**Amount Paid:** ₹{amount}\n"
+        f"**Status:** ✅ SUCCESSFUL\n"
+        f"------------------------------------------\n"
+        f"Skillclub में आपका स्वागत है!\n"
+        f"अब आप अपना कोर्स एक्सेस कर सकते हैं।"
+    )
+    bot.send_message(user_id, invoice_text, parse_mode="Markdown")
+
+# 5. Render के लिए Keep Alive सर्वर
 @app.route('/')
-def home(): return "Skillclub Online!"
-def run(): app.run(host='0.0.0.0', port=8080)
+def home():
+    return "Skillclub Bot is Online!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
 def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# --- 5. मुख्य फंक्शन्स ---
-def get_menu(uid, lang):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    b = STRINGS[lang]["btns"]
-    markup.add(b[0], b[1])
-    markup.add(b[2], b[3])
-    markup.add(b[4])
-    if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
-    return markup
+# --- बोट हैंडलर्स ---
 
+# /start कमांड और मेनू
 @bot.message_handler(commands=['start'])
 def start(message):
-    data = load_data()
-    uid = str(message.chat.id)
-    if uid not in data:
-        args = message.text.split()
-        ref_id = args[1] if len(args) > 1 else None
-        data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref_id, "status": "Free", "referrals": 0, "lang": "hi"}
-        save_data(data)
-    lang = data[uid].get("lang", "hi")
-    bot.send_message(uid, STRINGS[lang]["welcome"].format(name=message.from_user.first_name), reply_markup=get_menu(uid, lang), parse_mode="HTML")
+    user_id = str(message.from_user.id)
+    users = load_data()
+    
+    if user_id not in users:
+        users[user_id] = {
+            "name": message.from_user.first_name,
+            "referrals": 0,
+            "balance": 0,
+            "purchased_courses": []
+        }
+        save_data(users)
+    
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("📚 Courses", "🏆 Leaderboard")
+    markup.add("🤖 Ask AI", "💰 Wallet")
+    
+    bot.send_message(message.chat.id, f"नमस्ते {message.from_user.first_name}! Skillclub में आपका स्वागत है।", reply_markup=markup)
 
-# --- 6. अप्रूवल और विड्रॉल लॉजिक ---
-@bot.callback_query_handler(func=lambda call: True)
-def callbacks(call):
-    data = load_data()
-    action = call.data.split('_')[0]
-    uid = str(call.data.split('_')[-1])
+# कोर्सेस लिस्टिंग
+@bot.message_handler(func=lambda m: m.text == "📚 Courses")
+def show_courses(message):
+    markup = telebot.types.InlineKeyboardMarkup()
+    for cid, info in COURSES.items():
+        btn = telebot.types.InlineKeyboardButton(f"{info['name']} - ₹{info['price']}", callback_data=f"buy_{cid}")
+        markup.add(btn)
+    bot.send_message(message.chat.id, "हमारा कोर्स चुनें और सीखना शुरू करें:", reply_markup=markup)
 
-    if action == "app":
-        if uid in data and data[uid]["status"] == "Free":
-            data[uid]["status"] = "Paid"
-            lang = data[uid].get("lang", "hi")
-            s = STRINGS[lang]
-            p_id = data[uid].get("referred_by")
-            if p_id and p_id in data:
-                data[p_id]["balance"] += 200
-                data[p_id].setdefault("referrals", 0)
-                data[p_id]["referrals"] += 1
-            save_data(data)
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(s["download_btn"], url=COURSE_LINK))
-            bot.send_message(uid, s["success_msg"], reply_markup=markup, parse_mode="HTML")
-            bot.edit_message_caption("✅ <b>APPROVED</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
-        else:
-            bot.answer_callback_query(call.id, "Already Paid!")
+@bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
+def handle_purchase(call):
+    course_id = call.data.split('_')[1]
+    course = COURSES.get(course_id)
+    if course:
+        bot.answer_callback_query(call.id, f"आपने {course['name']} चुना है।")
+        bot.send_message(call.message.chat.id, f"✅ **{course['name']}** खरीदने के लिए एडमिन को ₹{course['price']} भेजें।\n\nइस कोर्स पर आपको ₹{course['commission']} कमीशन मिलेगा!")
 
-    elif action == "setlang":
-        new_lang = call.data.split("_")[1]
-        data[uid]["lang"] = new_lang
-        save_data(data)
-        bot.send_message(uid, "✅ Done!", reply_markup=get_menu(uid, new_lang))
+# लीडरबोर्ड
+@bot.message_handler(func=lambda m: m.text == "🏆 Leaderboard")
+def leaderboard(message):
+    users = load_data()
+    sorted_users = sorted(users.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)
+    
+    text = "🏆 **Skillclub Top 10 Leaders** 🏆\n\n"
+    for i, (uid, data) in enumerate(sorted_users[:10], 1):
+        text += f"{i}. {data.get('name', 'User')} — {data.get('referrals', 0)} Referrals\n"
+    bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
-    elif action == "ask_wd":
-        if data[uid]["balance"] < 500:
-            bot.answer_callback_query(call.id, "Min ₹500 required!", show_alert=True)
-        else:
-            msg = bot.send_message(uid, "📝 अपनी UPI ID भेजें:")
-            bot.register_next_step_handler(msg, save_wd, data[uid]["balance"])
+# AI कोचिंग (प्रॉम्प्ट बेस)
+@bot.message_handler(func=lambda m: m.text == "🤖 Ask AI")
+def ask_ai_intro(message):
+    bot.reply_to(message, "अपना सवाल पूछने के लिए /ask_ai के बाद अपना प्रश्न लिखें।\nउदाहरण: `/ask_ai AI Influencer कैसे बनाएं?`", parse_mode="Markdown")
 
-# --- 7. बटन्स का काम (The Missing Logic) ---
-@bot.message_handler(func=lambda m: True)
-def handle_menu(message):
-    data = load_data()
-    uid = str(message.chat.id)
-    user = data.get(uid, {"lang": "hi", "status": "Free", "balance": 0})
-    lang = user.get("lang", "hi")
-    s = STRINGS[lang]
-    text = message.text
+@bot.message_handler(commands=['ask_ai'])
+def handle_ai_query(message):
+    query = message.text.replace('/ask_ai', '').strip()
+    if not query:
+        bot.reply_to(message, "कृपया अपना सवाल लिखें।")
+        return
+    bot.reply_to(message, f"🤖 **Skillclub AI:**\n\nआपके सवाल '{query}' का विश्लेषण किया जा रहा है...")
 
-    if text in ["👤 प्रोफाइल", "👤 Profile"]:
-        bot.send_message(uid, s["profile"].format(name=user['name'], status=user['status'], refs=user.get('referrals', 0)), parse_mode="HTML")
+# --- एडमिन कमांड्स ---
 
-    elif text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
-        if user['status'] == "Paid":
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(s["download_btn"], url=COURSE_LINK))
-            bot.send_message(uid, s["download"], reply_markup=markup, parse_mode="HTML")
-        else:
-            bot.send_message(uid, s["buy"], parse_mode="HTML")
+# पेमेंट कंफर्मेशन और इनवॉइसिंग
+@bot.message_handler(commands=['confirm'])
+def confirm_payment(message):
+    if str(message.from_user.id) == ADMIN_ID:
+        try:
+            args = message.text.split()
+            if len(args) < 3:
+                bot.reply_to(message, "उपयोग: /confirm [user_id] [course_id]")
+                return
+            
+            target_id, c_id = args[1], args[2]
+            users = load_data()
+            
+            if target_id in users and c_id in COURSES:
+                if c_id not in users[target_id]['purchased_courses']:
+                    users[target_id]['purchased_courses'].append(c_id)
+                    save_data(users)
+                    send_invoice(target_id, c_id, COURSES[c_id]['price'])
+                    bot.reply_to(message, f"✅ भुगतान सफल! यूजर {target_id} को इनवॉइस भेज दिया गया है।")
+            else:
+                bot.reply_to(message, "❌ यूजर या कोर्स आईडी गलत है।")
+        except:
+            bot.reply_to(message, "❌ कमांड फॉर्मेट गलत है।")
 
-    elif text in ["💰 वॉलेट", "💰 Wallet"]:
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("💸 Withdrawal", callback_data=f"ask_wd_{uid}"))
-        bot.send_message(uid, s["wallet"].format(bal=user['balance']), reply_markup=markup, parse_mode="HTML")
+# ब्रॉडकास्ट फीचर
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if str(message.from_user.id) == ADMIN_ID:
+        text = message.text.replace('/broadcast', '').strip()
+        if not text:
+            bot.reply_to(message, "उपयोग: /broadcast [मैसेज]")
+            return
+        
+        users = load_data()
+        count = 0
+        for uid in users.keys():
+            try:
+                bot.send_message(uid, text)
+                count += 1
+            except: continue
+        bot.reply_to(message, f"✅ संदेश {count} यूजर्स को भेज दिया गया है।")
 
-    elif text in ["🔗 इनवाइट लिंक", "🔗 Invite Link"]:
-        if user['status'] == "Paid":
-            bot_info = bot.get_me()
-            link = f"https://t.me/{bot_info.username}?start={uid}"
-            bot.send_message(uid, s["invite"].format(link=link), parse_mode="HTML")
-        else:
-            bot.send_message(uid, s["not_paid"], parse_mode="HTML")
-
-    elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("Hindi 🇮🇳", callback_data="setlang_hi"),
-                   types.InlineKeyboardButton("English 🇺🇸", callback_data="setlang_en"))
-        bot.send_message(uid, "भाषा चुनें / Choose Language:", reply_markup=markup)
-
-# --- 8. फोटो हैंडलर ---
-@bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    uid = str(message.chat.id)
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}"),
-               types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>नया पेमेंट!</b>\nID: <code>{uid}</code>", reply_markup=markup, parse_mode="HTML")
-    bot.send_message(uid, "✅ स्क्रीनशॉट मिल गया! अप्रूवल का इंतज़ार करें।")
-
-def save_wd(message, amt):
-    bot.send_message(ADMIN_ID, f"🔔 <b>WD Request!</b>\nID: <code>{message.chat.id}</code>\nAmt: ₹{amt}\nUPI: {message.text}", parse_mode="HTML")
-    bot.send_message(message.chat.id, "✅ रिक्वेस्ट भेज दी गई है।")
-
+# 6. मुख्य लूप
 if __name__ == "__main__":
-    print("🚀 Bot is starting...")
-    keep_alive() # Ye UptimeRobot ko reply deta hai
-
-    import time
+    keep_alive()
+    print("🚀 Skillclub Bot is Starting on Render...")
     while True:
         try:
-            # none_stop=True se error aane par bhi bot band nahi hota
             bot.polling(none_stop=True, interval=0, timeout=20)
         except Exception as e:
-            print(f"⚠️ Polling Error: {e}")
-            time.sleep(5) # 5 second baad apne aap restart hoga
+            print(f"❌ Error: {e}")
+            time.sleep(10)
