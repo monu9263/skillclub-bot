@@ -10,19 +10,24 @@ import time
 # --- 1. कॉन्फ़िगरेशन (CONFIGURATION) ---
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = os.getenv('ADMIN_ID')
+
+# बोट स्टार्ट करने से पहले चेक करें
+if not API_TOKEN or not ADMIN_ID:
+    print("❌ ERROR: API_TOKEN या ADMIN_ID सेट नहीं है!")
+
 bot = telebot.TeleBot(API_TOKEN)
 
-# फाइल नेम्स (Data Files)
+# डेटा फाइल्स
 DB_FILE = 'users.json'
 COURSE_DB = 'courses.json'
 SALES_FILE = 'sales_log.json'
 WD_FILE = 'withdrawals_log.json'
 
-# सेटिंग्स (Settings)
+# सेटिंग्स
 ADMIN_UPI = "anand1312@fam" 
-WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
+WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" # यह लिंक काम कर रहा है
 
-# --- 2. भाषा और मैसेज (BILINGUAL STRINGS) ---
+# --- 2. भाषा और मैसेज (STRINGS) ---
 STRINGS = {
     "hi": {
         "welcome": (
@@ -30,7 +35,7 @@ STRINGS = {
             "🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n"
             "1️⃣ <b>कोर्स चुनें:</b> नीचे '📚 कोर्स खरीदें' बटन दबाएं।\n"
             "2️⃣ <b>पेमेंट करें:</b> बोट द्वारा दी गई UPI ID पर।\n"
-            "3️⃣ <b>स्क्रीनशॉट भेजें:</b> Send your payment screenshot in bot here.\n"
+            "3️⃣ <b>स्क्रीनशॉट भेजें:</b> पेमेंट का स्क्रीनशॉट यहाँ भेजें।\n"
             "4️⃣ <b>लिंक लें:</b> '🔗 इनवाइट लिंक' से अपना लिंक बनाएं।\n\n"
             "🔥 <b>Daily Earn:</b> लिंक रेफर करें और रोज़ कमाएं! 💰"
         ),
@@ -42,7 +47,6 @@ STRINGS = {
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
         "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
-        "wd_request_sent": "✅ रिक्वेस्ट भेज दी गई है!",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "⚙️ सेटिंग्स"]
     },
@@ -52,7 +56,7 @@ STRINGS = {
             "🚀 <b>Steps to Start:</b>\n"
             "1️⃣ <b>Select Course:</b> Click '📚 Buy Course'.\n"
             "2️⃣ <b>Pay:</b> Send money to the provided UPI.\n"
-            "3️⃣ <b>Screenshot:</b> Send your payment screenshot in bot here.\n"
+            "3️⃣ <b>Screenshot:</b> Send your payment screenshot here.\n"
             "4️⃣ <b>Get Link:</b> Generate via '🔗 Invite Link'.\n\n"
             "🔥 <b>Daily Earn:</b> Refer link & earn daily! 💰"
         ),
@@ -64,7 +68,6 @@ STRINGS = {
         "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}\n📉 Min. Withdrawal: ₹500",
         "invite": "🔥 <b>Your Link:</b>\n{link}\n\nPromote and earn daily!",
         "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
-        "wd_request_sent": "✅ Request Sent!",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "🏆 Leaderboard", "⚙️ Settings"]
     }
@@ -72,10 +75,15 @@ STRINGS = {
 
 # --- 3. डेटा मैनेजर (DATA MANAGER) ---
 def load_json(filename):
-    if not os.path.exists(filename): return [] if "log" in filename else {}
+    if not os.path.exists(filename):
+        # अगर फाइल नहीं है तो खाली बनाएँ
+        default = [] if "log" in filename else {}
+        with open(filename, 'w') as f: json.dump(default, f)
+        return default
     try:
         with open(filename, 'r') as f: return json.load(f)
-    except: return [] if "log" in filename else {}
+    except:
+        return [] if "log" in filename else {}
 
 def save_json(filename, data):
     with open(filename, 'w') as f: json.dump(data, f, indent=4)
@@ -90,7 +98,7 @@ def log_transaction(filename, amount):
     })
     save_json(filename, logs)
 
-# --- 4. एडमिन स्टेट्स (ADMIN STATS LOGIC) ---
+# --- 4. एडमिन स्टेट्स (ADMIN STATS) ---
 def get_stats():
     data = load_json(DB_FILE)
     sales = load_json(SALES_FILE)
@@ -119,7 +127,52 @@ def get_stats():
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
 
-# --- 5. कॉलबैक हैंडलर्स (CALLBACKS) ---
+# --- 5. मुख्य मेनू (MAIN MENU) ---
+def get_main_menu(uid, lang):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    b = STRINGS[lang]["btns"]
+    markup.add(b[0], b[1]).add(b[2], b[3]).add(b[4], b[5])
+    if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
+    return markup
+
+# --- 6. स्टार्ट कमांड (ROBUST START COMMAND) ---
+@bot.message_handler(commands=['start'])
+def start_cmd(message):
+    try:
+        data, uid = load_json(DB_FILE), str(message.chat.id)
+        
+        # नए यूजर को रजिस्टर करें
+        if uid not in data:
+            args = message.text.split()
+            ref = args[1] if len(args) > 1 else None
+            data[uid] = {
+                "name": message.from_user.first_name, 
+                "balance": 0, 
+                "referred_by": ref, 
+                "status": "Free", 
+                "referrals": 0, 
+                "lang": "hi", 
+                "purchased": []
+            }
+            save_json(DB_FILE, data)
+            print(f"✅ New User: {uid}")
+
+        lang = data[uid].get("lang", "hi")
+        welcome_text = STRINGS[lang]["welcome"].format(name=data[uid]["name"])
+        markup = get_main_menu(uid, lang)
+        
+        # --- फोटो भेजने का सुरक्षित तरीका (Try-Except) ---
+        try:
+            bot.send_photo(uid, WELCOME_PHOTO, caption=welcome_text, reply_markup=markup, parse_mode="HTML")
+        except Exception as e:
+            print(f"⚠️ Photo Error for {uid}: {e}")
+            # अगर फोटो फेल हो, तो टेक्स्ट भेजें (ताकि बोट न रुके)
+            bot.send_message(uid, welcome_text, reply_markup=markup, parse_mode="HTML")
+            
+    except Exception as e:
+        print(f"❌ Critical Error in Start: {e}")
+
+# --- 7. अन्य हैंडलर्स (HANDLERS) ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
     data, courses = load_json(DB_FILE), load_json(COURSE_DB)
@@ -178,7 +231,6 @@ def callbacks(call):
         msg = bot.send_message(uid, "📝 <b>Send UPI ID:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_withdrawal, data[uid]["balance"])
 
-# --- 6. एडमिन फंक्शन्स (ADMIN PANEL) ---
 def process_withdrawal(message, amt):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{message.chat.id}_{amt}"),
@@ -236,24 +288,6 @@ def send_broadcast(message):
             count += 1
         except: continue
     bot.send_message(ADMIN_ID, f"✅ Sent to {count} users.")
-
-# --- 7. मुख्य मेनू (MAIN MENU & HANDLERS) ---
-def get_main_menu(uid, lang):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    b = STRINGS[lang]["btns"]
-    markup.add(b[0], b[1]).add(b[2], b[3]).add(b[4], b[5])
-    if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
-    return markup
-
-@bot.message_handler(commands=['start'])
-def start_cmd(message):
-    data, uid = load_json(DB_FILE), str(message.chat.id)
-    if uid not in data:
-        ref = message.text.split()[1] if len(message.text.split()) > 1 else None
-        data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": []}
-        save_json(DB_FILE, data)
-    lang = data[uid].get("lang", "hi")
-    bot.send_photo(uid, WELCOME_PHOTO, caption=STRINGS[lang]["welcome"].format(name=data[uid]["name"]), reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
 
 @bot.message_handler(func=lambda m: True)
 def handle_menu(message):
@@ -323,31 +357,29 @@ def handle_photo(message):
         bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nID: <code>{uid}</code>\nCourse: {courses[pending_cid]['name']}", reply_markup=markup, parse_mode="HTML")
         bot.send_message(uid, "✅ Screenshot received! Please wait for approval.")
 
-# --- 8. वेब सर्वर (RENDER PORT BINDING & CONFLICT FIX) ---
+# --- 8. वेब सर्वर (RENDER SERVER CONFIG) ---
 app = Flask('')
 @app.route('/')
 def home(): return "Skillclub Bot Running"
 
 def run_server():
-    # Render का Dynamic Port
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    # सर्वर को बैकग्राउंड में चलाएं ताकि Render खुश रहे
+    # 1. वेब सर्वर शुरू करें (Render को खुश रखने के लिए)
     Thread(target=run_server).start()
     
-    # Conflict रोकने के लिए पुराना Webhook हटाएं
+    # 2. पुराना Webhook हटाएं (Conflict हटाने के लिए)
+    print("🚀 Bot starting...")
     bot.remove_webhook()
     time.sleep(1)
     
-    print("🚀 Bot is starting polling...")
-    
-    # Auto-Restart Loop
+    # 3. बोट को Polling मोड में चलाएं
     while True:
         try:
             bot.polling(none_stop=True, skip_pending=True, timeout=60)
         except Exception as e:
             print(f"⚠️ Polling Error: {e}")
             time.sleep(5)
-    
+            
