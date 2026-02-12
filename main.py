@@ -25,8 +25,8 @@ SALES_FILE = 'sales_log.json'
 WD_FILE = 'withdrawals_log.json'
 SETTINGS_FILE = 'settings.json'
 
-# SETTINGS
-ADMIN_UPI = "anand1312@fam" 
+# DEFAULT SETTINGS
+DEFAULT_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
 # --- 2. STRINGS ---
@@ -66,7 +66,10 @@ STRINGS = {
 # --- 3. DATA MANAGER ---
 def load_json(filename):
     if not os.path.exists(filename):
-        default = {"buttons": []} if filename == SETTINGS_FILE else {}
+        # FIX: Added 'upi' to settings default
+        if filename == SETTINGS_FILE: default = {"upi": DEFAULT_UPI, "buttons": []}
+        elif "log" in filename: default = []
+        else: default = {}
         with open(filename, 'w') as f: json.dump(default, f)
         return default
     try:
@@ -81,6 +84,9 @@ def log_transaction(filename, amount):
     if not isinstance(logs, list): logs = []
     logs.append({"amount": amount, "date": time.strftime("%Y-%m-%d"), "month": time.strftime("%Y-%m")})
     save_json(filename, logs)
+
+def get_upi():
+    return load_json(SETTINGS_FILE).get("upi", DEFAULT_UPI)
 
 # --- 4. ADMIN STATS ---
 def get_stats():
@@ -138,7 +144,7 @@ def start_cmd(message):
 
 # --- 6. ADMIN FUNCTIONS ---
 
-# (1) BROADCAST WITH HEADLINE
+# (1) BROADCAST
 def process_broadcast(message):
     data = load_json(DB_FILE)
     count = 0
@@ -146,7 +152,6 @@ def process_broadcast(message):
     
     for uid in data:
         try:
-            # FIX: Adding Announcement Headline
             if message.content_type == 'text':
                 text = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.text}"
                 bot.send_message(uid, text, parse_mode="HTML")
@@ -158,7 +163,7 @@ def process_broadcast(message):
         except: continue
     bot.send_message(ADMIN_ID, f"✅ Sent to {count} users.")
 
-# (2) COURSE MANAGEMENT (ADD / DELETE)
+# (2) COURSE MANAGEMENT
 def add_course_start(message):
     msg = bot.send_message(ADMIN_ID, "📝 Course Name:")
     bot.register_next_step_handler(msg, process_c_price)
@@ -193,11 +198,10 @@ def save_c(message, name, price, l1, l2):
     save_json(COURSE_DB, courses)
     bot.send_message(ADMIN_ID, f"✅ Course '{name}' Added!")
 
-# (3) SUPPORT SETTINGS FIX
+# (3) SUPPORT SETTINGS
 def add_supp_name(message):
     name = message.text
     msg = bot.send_message(ADMIN_ID, f"🔗 Enter Link (URL) for '{name}':")
-    # FIX: Passing 'name' to the next step correctly
     bot.register_next_step_handler(msg, add_supp_link, name)
 
 def add_supp_link(message, name):
@@ -207,7 +211,15 @@ def add_supp_link(message, name):
     save_json(SETTINGS_FILE, settings)
     bot.send_message(ADMIN_ID, f"✅ Button '{name}' Added!")
 
-# (4) SEARCH USER LOGIC
+# (4) CHANGE UPI FUNCTION
+def change_upi_process(message):
+    new_upi = message.text.strip()
+    settings = load_json(SETTINGS_FILE)
+    settings["upi"] = new_upi
+    save_json(SETTINGS_FILE, settings)
+    bot.send_message(ADMIN_ID, f"✅ <b>UPI Updated!</b>\nNew UPI: <code>{new_upi}</code>", parse_mode="HTML")
+
+# (5) SEARCH USER
 def search_by_id(message):
     uid = message.text.strip()
     data = load_json(DB_FILE)
@@ -224,12 +236,11 @@ def search_by_name(message):
     for uid, info in data.items():
         if name_query in info['name'].lower():
             found.append(f"🆔 {uid} | {info['name']}")
-    
     if found:
-        res = "\n".join(found[:10]) # Show top 10
+        res = "\n".join(found[:10]) 
         bot.send_message(ADMIN_ID, f"🔍 <b>Results:</b>\n\n{res}", parse_mode="HTML")
     else:
-        bot.send_message(ADMIN_ID, "❌ No user found with that name.")
+        bot.send_message(ADMIN_ID, "❌ No user found.")
 
 # --- 7. HANDLERS ---
 @bot.callback_query_handler(func=lambda call: True)
@@ -247,7 +258,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
     elif call.data == "adm_clear":
-        save_json(SETTINGS_FILE, {"buttons": []})
+        save_json(SETTINGS_FILE, {"buttons": [], "upi": get_upi()})
         bot.send_message(uid, "✅ All buttons cleared!")
 
     # MANAGE COURSES
@@ -282,14 +293,15 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
-    # BUY INFO
+    # BUY INFO (Dynamic UPI)
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
         if c:
             data[uid]["pending_buy"] = cid
             save_json(DB_FILE, data)
-            bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=ADMIN_UPI), parse_mode="HTML")
+            current_upi = get_upi() # FIX: Using Dynamic UPI
+            bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
     # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
@@ -357,20 +369,18 @@ def handle_menu(message):
     if text == "🛠 Admin Panel" and uid == ADMIN_ID:
         m = types.ReplyKeyboardMarkup(resize_keyboard=True)
         m.add("📊 Stats", "📢 Broadcast")
-        # FIX: Renamed to Manage Courses
         m.add("📥 Export Data", "🎓 Manage Courses")
         m.add("📞 Support Settings", "👤 Search User")
-        m.add("🔙 Back to Main Menu")
+        # FIX: Added Change UPI Button
+        m.add("💳 Change UPI", "🔙 Back to Main Menu")
         bot.send_message(uid, "🛠 Admin Panel:", reply_markup=m)
     
     elif text == "📊 Stats" and uid == ADMIN_ID: bot.send_message(uid, get_stats(), parse_mode="HTML")
     
-    # FIX: Broadcast Logic
     elif text == "📢 Broadcast" and uid == ADMIN_ID:
-        msg = bot.send_message(uid, "📢 Send Message to Broadcast (Text/Photo):")
+        msg = bot.send_message(uid, "📢 Send Message to Broadcast:")
         bot.register_next_step_handler(msg, process_broadcast)
     
-    # FIX: Manage Courses (Add/Delete)
     elif text == "🎓 Manage Courses" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("➕ Add New", callback_data="c_add"),
@@ -382,11 +392,16 @@ def handle_menu(message):
         m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), types.InlineKeyboardButton("🗑️ Clear All", callback_data="adm_clear"))
         bot.send_message(uid, "⚙️ Settings:", reply_markup=m)
     
+    # FIX: Change UPI Logic
+    elif text == "💳 Change UPI" and uid == ADMIN_ID:
+        current = get_upi()
+        msg = bot.send_message(uid, f"💳 <b>Current UPI:</b> <code>{current}</code>\n\n👇 <b>Enter New UPI ID:</b>", parse_mode="HTML")
+        bot.register_next_step_handler(msg, change_upi_process)
+
     elif text == "📥 Export Data" and uid == ADMIN_ID:
         if os.path.exists(DB_FILE): bot.send_document(uid, open(DB_FILE, 'rb'))
         if os.path.exists(SALES_FILE): bot.send_document(uid, open(SALES_FILE, 'rb'))
     
-    # FIX: Search User Options
     elif text == "👤 Search User" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("🆔 By ID", callback_data="s_id"),
@@ -432,17 +447,4 @@ def handle_menu(message):
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", callback_data="setlang_en"))
-        bot.send_message(uid, STRINGS[lang]["lang_select"], reply_markup=m, parse_mode="HTML")
-
-    elif text in ["🔗 इनवाइट लिंक", "🔗 Invite Link"]:
-        if not data[uid].get("purchased", []): bot.send_message(uid, STRINGS[lang]["invite_locked"], parse_mode="HTML")
-        else:
-            link = f"https://t.me/{bot.get_me().username}?start={uid}"
-            bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
-
-    elif text in ["🔙 Back to Main Menu", "🔙 वापस"]:
-        bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
-
-@bot.message_handler(content_types=['photo'])
-de
+        m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", c
