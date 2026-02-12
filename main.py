@@ -25,7 +25,7 @@ WD_FILE = 'withdrawals_log.json'
 
 # सेटिंग्स
 ADMIN_UPI = "anand1312@fam" 
-WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" # यह लिंक काम कर रहा है
+WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
 # --- 2. भाषा और मैसेज (STRINGS) ---
 STRINGS = {
@@ -46,6 +46,7 @@ STRINGS = {
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\n1. UPI: <code>{upi}</code> पर पेमेंट करें।\n2. स्क्रीनशॉट इसी बोट में भेजें।",
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
+        "invite_locked": "❌ <b>लिंक लॉक है! (Link Locked)</b>\n\nइनवाइट लिंक जनरेट करने के लिए आपको पहले <b>कम से कम एक कोर्स खरीदना होगा</b>।\n\nकृपया '📚 कोर्स खरीदें' पर क्लिक करें।",
         "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "⚙️ सेटिंग्स"]
@@ -67,6 +68,7 @@ STRINGS = {
         "payment_instruction": "🚀 <b>Course:</b> {cname}\n💰 <b>Price:</b> ₹{price}\n\n1. Pay to UPI: <code>{upi}</code>\n2. Send screenshot here.",
         "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}\n📉 Min. Withdrawal: ₹500",
         "invite": "🔥 <b>Your Link:</b>\n{link}\n\nPromote and earn daily!",
+        "invite_locked": "❌ <b>Link Locked!</b>\n\nYou need to <b>buy at least one course</b> to generate your invite link.\n\nPlease click on '📚 Buy Course' first.",
         "leaderboard_header": "🏆 <b>Skillclub Top 10 Leaders</b> 🏆\n\n",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "🏆 Leaderboard", "⚙️ Settings"]
@@ -76,7 +78,6 @@ STRINGS = {
 # --- 3. डेटा मैनेजर (DATA MANAGER) ---
 def load_json(filename):
     if not os.path.exists(filename):
-        # अगर फाइल नहीं है तो खाली बनाएँ
         default = [] if "log" in filename else {}
         with open(filename, 'w') as f: json.dump(default, f)
         return default
@@ -141,7 +142,6 @@ def start_cmd(message):
     try:
         data, uid = load_json(DB_FILE), str(message.chat.id)
         
-        # नए यूजर को रजिस्टर करें
         if uid not in data:
             args = message.text.split()
             ref = args[1] if len(args) > 1 else None
@@ -161,12 +161,10 @@ def start_cmd(message):
         welcome_text = STRINGS[lang]["welcome"].format(name=data[uid]["name"])
         markup = get_main_menu(uid, lang)
         
-        # --- फोटो भेजने का सुरक्षित तरीका (Try-Except) ---
         try:
             bot.send_photo(uid, WELCOME_PHOTO, caption=welcome_text, reply_markup=markup, parse_mode="HTML")
         except Exception as e:
             print(f"⚠️ Photo Error for {uid}: {e}")
-            # अगर फोटो फेल हो, तो टेक्स्ट भेजें (ताकि बोट न रुके)
             bot.send_message(uid, welcome_text, reply_markup=markup, parse_mode="HTML")
             
     except Exception as e:
@@ -289,6 +287,7 @@ def send_broadcast(message):
         except: continue
     bot.send_message(ADMIN_ID, f"✅ Sent to {count} users.")
 
+# --- 8. मेनू हैंडलर (MENU HANDLER WITH LOCK LOGIC) ---
 @bot.message_handler(func=lambda m: True)
 def handle_menu(message):
     data, uid = load_json(DB_FILE), str(message.chat.id)
@@ -338,9 +337,18 @@ def handle_menu(message):
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         bot.send_message(uid, STRINGS[lang]["profile"].format(name=data[uid]['name'], status=data[uid]['status'], refs=data[uid].get('referrals', 0)), parse_mode="HTML")
     
+    # --- INVITE LINK LOGIC (LOCKED) ---
     elif text in ["🔗 इनवाइट लिंक", "🔗 Invite Link"]:
-        link = f"https://t.me/{bot.get_me().username}?start={uid}"
-        bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
+        # चेक करें कि क्या यूजर ने कोर्स खरीदा है
+        purchased_list = data[uid].get("purchased", [])
+        
+        if not purchased_list:
+            # अगर कोर्स नहीं खरीदा
+            bot.send_message(uid, STRINGS[lang]["invite_locked"], parse_mode="HTML")
+        else:
+            # अगर कोर्स खरीदा है
+            link = f"https://t.me/{bot.get_me().username}?start={uid}"
+            bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
     
     elif text == "🔙 Back to Main Menu":
         bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
@@ -357,7 +365,7 @@ def handle_photo(message):
         bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nID: <code>{uid}</code>\nCourse: {courses[pending_cid]['name']}", reply_markup=markup, parse_mode="HTML")
         bot.send_message(uid, "✅ Screenshot received! Please wait for approval.")
 
-# --- 8. वेब सर्वर (RENDER SERVER CONFIG) ---
+# --- 9. वेब सर्वर (RENDER SERVER CONFIG) ---
 app = Flask('')
 @app.route('/')
 def home(): return "Skillclub Bot Running"
@@ -367,19 +375,16 @@ def run_server():
     app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    # 1. वेब सर्वर शुरू करें (Render को खुश रखने के लिए)
     Thread(target=run_server).start()
     
-    # 2. पुराना Webhook हटाएं (Conflict हटाने के लिए)
     print("🚀 Bot starting...")
     bot.remove_webhook()
     time.sleep(1)
     
-    # 3. बोट को Polling मोड में चलाएं
     while True:
         try:
             bot.polling(none_stop=True, skip_pending=True, timeout=60)
         except Exception as e:
             print(f"⚠️ Polling Error: {e}")
             time.sleep(5)
-            
+    
