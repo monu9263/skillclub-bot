@@ -10,7 +10,7 @@ import random
 
 # --- 1. कॉन्फ़िगरेशन (CONFIGURATION) ---
 API_TOKEN = os.getenv('API_TOKEN')
-ADMIN_ID = "8114779182"  # आपकी एडमिन आईडी
+ADMIN_ID = "8114779182"
 
 if not API_TOKEN:
     print("❌ ERROR: API_TOKEN not found!")
@@ -29,7 +29,7 @@ SETTINGS_FILE = 'settings.json'
 ADMIN_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
-# --- 2. STRINGS (UPDATED WITH ALL FIXES) ---
+# --- 2. STRINGS (UPDATED FIXES) ---
 STRINGS = {
     "hi": {
         "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n1️⃣ '📚 कोर्स खरीदें' बटन दबाएं।\n2️⃣ पेमेंट करें।\n3️⃣ स्क्रीनशॉट भेजें।\n4️⃣ '🔗 इनवाइट लिंक' से लिंक बनाएं।",
@@ -37,7 +37,9 @@ STRINGS = {
         "lang_updated": "✅ भाषा <b>Hindi</b> में बदल दी गई है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n💰 <b>बैलेंस:</b> ₹{bal}\n👥 <b>रेफरल:</b> {refs}\n📅 <b>जॉइन डेट:</b> {date}",
         "buy_menu": "🎓 <b>हमारे उपलब्ध कोर्सेस चुनें:</b>",
+        # FIX: Payment Instruction Updated
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\nℹ️ <b>पेमेंट निर्देश:</b>\n1. नीचे दी गई UPI ID पर पेमेंट करें:\n   👉 <code>{upi}</code>\n\n2. पेमेंट का <b>स्क्रीनशॉट (Screenshot)</b> लें।\n3. वह स्क्रीनशॉट <b>इसी बोट में भेजें।</b>",
+        # FIX: Min Withdrawal Added
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n⚠️ <b>न्यूनतम विड्रॉल:</b> ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
         "invite_locked": "❌ <b>लिंक लॉक है!</b>\nपहले <b>कम से कम एक कोर्स खरीदें</b>।",
@@ -89,7 +91,6 @@ def get_stats():
     wd = load_json(WD_FILE)
     today, month = time.strftime("%Y-%m-%d"), time.strftime("%Y-%m")
     
-    # Sales Stats
     t_sell, m_sell, l_sell = 0, 0, 0
     for s in (sales if isinstance(sales, list) else []):
         amt = s.get('amount', 0)
@@ -97,7 +98,6 @@ def get_stats():
         if s.get('date') == today: t_sell += amt
         if s.get('month') == month: m_sell += amt
         
-    # Withdrawal Stats
     t_wd, l_wd = 0, 0
     for w in (wd if isinstance(wd, list) else []):
         amt = w.get('amount', 0)
@@ -113,7 +113,7 @@ def get_stats():
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
 
-# --- 5. MAIN MENU (LEADERBOARD RESTORED) ---
+# --- 5. MAIN MENU (LEADERBOARD ADDED) ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
@@ -121,7 +121,7 @@ def get_main_menu(uid, lang):
     markup.add(b[0], b[1])
     # Row 2
     markup.add(b[2], b[3])
-    # Row 3 (Leaderboard & Support)
+    # Row 3 (Leaderboard added)
     markup.add(b[4], b[5])
     
     if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
@@ -135,7 +135,7 @@ def start_cmd(message):
         ref = args[1] if len(args) > 1 else None
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
     
-    # Fix Join Date
+    # FIX: Date Issue
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
         
@@ -168,13 +168,13 @@ def process_c_price(message):
 def process_c_l1(message, name):
     try: price = int(re.sub(r'\D', '', message.text))
     except: price = 0
-    msg = bot.send_message(ADMIN_ID, "👥 L1 Commission:")
+    msg = bot.send_message(ADMIN_ID, "👥 Level 1 Commission:")
     bot.register_next_step_handler(msg, process_c_l2, name, price)
 
 def process_c_l2(message, name, price):
     try: l1 = int(re.sub(r'\D', '', message.text))
     except: l1 = 0
-    msg = bot.send_message(ADMIN_ID, "👥 L2 Commission:")
+    msg = bot.send_message(ADMIN_ID, "👥 Level 2 Commission:")
     bot.register_next_step_handler(msg, finalize_c, name, price, l1)
 
 def finalize_c(message, name, price, l1):
@@ -226,7 +226,7 @@ def callbacks(call):
         if c:
             data[uid]["pending_buy"] = cid
             save_json(DB_FILE, data)
-            # FIX: Detailed Payment Instruction
+            # FIX: Message now asks for screenshot
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=ADMIN_UPI), parse_mode="HTML")
             
     elif call.data.startswith("app_"):
@@ -325,7 +325,7 @@ def handle_menu(message):
         bal = data[uid].get('balance', 0)
         m = types.InlineKeyboardMarkup()
         if bal >= 500: m.add(types.InlineKeyboardButton("💸 Withdraw", callback_data="ask_wd"))
-        # FIX: Min withdrawal message
+        # FIX: Min withdrawal message added
         bot.send_message(uid, STRINGS[lang]["wallet_msg"].format(bal=bal), reply_markup=m, parse_mode="HTML")
 
     elif text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
@@ -347,6 +347,7 @@ def handle_menu(message):
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
         if not btns:
+            # FIX: Only "Contact Admin" if empty
             bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
         else:
             m = types.InlineKeyboardMarkup()
@@ -381,15 +382,21 @@ def handle_photo(message):
         bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: {uid}\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
         bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
 
-# --- 8. SERVER ---
+# --- 8. SERVER (With Exception Handling) ---
 @app.route('/')
 def home(): return "Bot Live"
 
-def run(): app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    Thread(target=run).start()
+    Thread(target=run_server).start()
+    print("🚀 Bot starting...")
     bot.remove_webhook()
     time.sleep(1)
-    print("🚀 Bot Polling Started...")
-    bot.polling(none_stop=True, skip_pending=True)
+    while True:
+        try: bot.polling(none_stop=True, skip_pending=True, timeout=60)
+        except Exception as e:
+            print(f"⚠️ Error: {e}")
+            time.sleep(5)
