@@ -311,17 +311,39 @@ def handle_menu(message):
         bot.send_message(uid, msg, reply_markup=m, parse_mode="HTML")
 
     # --- USER SUPPORT (DYNAMIC VIEW) ---
-    elif text in ["📞 सहायता", "📞 Support"]:
+    # --- USER SUPPORT (UPDATED WITH MAGIC LINK) ---
+    elif text in ["📞 सहायता", "📞 Support", "📞 Contact Support"]:
+        # 1. यूजर का डेटा निकालें
+        sales = len(data[uid].get("purchased", []))  # कुल सेल्स
+        bal = data[uid].get("balance", 0)            # वॉलेट बैलेंस
+        status = data[uid].get("status", "Free")     # स्टेटस
+        join_date = data[uid].get("join_date", "Old") # जॉइन डेट
+
+        # 2. Magic Link बनाएं
+        # नोट: सुनिश्चित करें कि ऊपर SUPPORT_BOT_USERNAME सेट है
+        bot_username = "SkillClubHelpBot" # <--- यहाँ अपने सपोर्ट बोट का यूजरनेम लिखें (बिना @)
+        
+        # डेटा पैक करें (Format: sales_bal_status_date)
+        payload = f"{sales}_{bal}_{status}_{join_date}".replace(" ", "")
+        magic_link = f"https://t.me/{bot_username}?start={payload}"
+
+        # 3. बटन बनाएं
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
         
-        if not btns:
-            bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
-        else:
-            m = types.InlineKeyboardMarkup()
+        m = types.InlineKeyboardMarkup()
+
+        # पुराने बटन (Insta/Telegram Channel)
+        if btns:
             for b in btns:
                 m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b['url']))
-            bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
+
+        # नया कांटेक्ट बटन (Magic Link के साथ)
+        contact_text = "💬 Live Chat with Admin" if lang == "en" else "💬 एडमिन से चैट करें"
+        m.add(types.InlineKeyboardButton(contact_text, url=magic_link))
+        
+        # मैसेज भेजें
+        bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
 
     elif text == "📊 Stats" and uid == ADMIN_ID: bot.send_message(uid, get_stats(), parse_mode="HTML")
     elif text == "➕ Add Course" and uid == ADMIN_ID: add_course_start(message)
