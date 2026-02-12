@@ -8,7 +8,7 @@ from threading import Thread
 import time
 import random
 
-# --- 1. CONFIGURATION ---
+# --- 1. कॉन्फ़िगरेशन (CONFIGURATION) ---
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = "8114779182"  # आपकी एडमिन आईडी
 
@@ -29,7 +29,7 @@ SETTINGS_FILE = 'settings.json'
 ADMIN_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
-# --- 2. STRINGS ---
+# --- 2. STRINGS (UPDATED WITH ALL FIXES) ---
 STRINGS = {
     "hi": {
         "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n1️⃣ '📚 कोर्स खरीदें' बटन दबाएं।\n2️⃣ पेमेंट करें।\n3️⃣ स्क्रीनशॉट भेजें।\n4️⃣ '🔗 इनवाइट लिंक' से लिंक बनाएं।",
@@ -37,13 +37,14 @@ STRINGS = {
         "lang_updated": "✅ भाषा <b>Hindi</b> में बदल दी गई है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n💰 <b>बैलेंस:</b> ₹{bal}\n👥 <b>रेफरल:</b> {refs}\n📅 <b>जॉइन डेट:</b> {date}",
         "buy_menu": "🎓 <b>हमारे उपलब्ध कोर्सेस चुनें:</b>",
-        "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\n1. UPI: <code>{upi}</code> पर पेमेंट करें।\n2. स्क्रीनशॉट इसी बोट में भेजें।",
-        "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n📉 न्यूनतम विड्रॉल: ₹500",
+        "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\nℹ️ <b>पेमेंट निर्देश:</b>\n1. नीचे दी गई UPI ID पर पेमेंट करें:\n   👉 <code>{upi}</code>\n\n2. पेमेंट का <b>स्क्रीनशॉट (Screenshot)</b> लें।\n3. वह स्क्रीनशॉट <b>इसी बोट में भेजें।</b>",
+        "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n⚠️ <b>न्यूनतम विड्रॉल:</b> ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
         "invite_locked": "❌ <b>लिंक लॉक है!</b>\nपहले <b>कम से कम एक कोर्स खरीदें</b>।",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "support_msg": "📞 <b>सपोर्ट सेंटर:</b>\nनीचे दिए गए विकल्पों पर क्लिक करें:",
-        "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "📞 सहायता", "⚙️ सेटिंग्स"]
+        "leaderboard": "🏆 <b>टॉप 10 लीडरबोर्ड (Top Referrers):</b>\n\n{list}",
+        "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "📞 सहायता"]
     },
     "en": {
         "welcome": "Hello {name}! Welcome to <b>Skillclub</b>. 🙏\n\n🚀 <b>Steps to Start:</b>\n1️⃣ Click '📚 Buy Course'.\n2️⃣ Pay via UPI.\n3️⃣ Send Screenshot here.",
@@ -51,13 +52,14 @@ STRINGS = {
         "lang_updated": "✅ Language updated to <b>English</b>.",
         "profile": "👤 <b>Name:</b> {name}\n🏆 <b>Status:</b> {status}\n💰 <b>Balance:</b> ₹{bal}\n👥 <b>Referrals:</b> {refs}\n📅 <b>Joined:</b> {date}",
         "buy_menu": "🎓 <b>Available Courses:</b>",
-        "payment_instruction": "🚀 <b>Course:</b> {cname}\n💰 <b>Price:</b> ₹{price}\n\nPay to UPI: <code>{upi}</code>",
-        "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}",
+        "payment_instruction": "🚀 <b>Course:</b> {cname}\n💰 <b>Price:</b> ₹{price}\n\nℹ️ <b>Instructions:</b>\n1. Pay to UPI: <code>{upi}</code>\n2. Take a Screenshot.\n3. <b>Send the screenshot here.</b>",
+        "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}\n⚠️ <b>Min Withdrawal:</b> ₹500",
         "invite": "🔥 <b>Your Link:</b>\n{link}",
         "invite_locked": "❌ <b>Locked!</b> Buy course first.",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "support_msg": "📞 <b>Support Center:</b>",
-        "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "📞 Support", "⚙️ Settings"]
+        "leaderboard": "🏆 <b>Top 10 Leaderboard:</b>\n\n{list}",
+        "btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "🏆 Leaderboard", "📞 Support"]
     }
 }
 
@@ -80,13 +82,14 @@ def log_transaction(filename, amount):
     logs.append({"amount": amount, "date": time.strftime("%Y-%m-%d"), "month": time.strftime("%Y-%m")})
     save_json(filename, logs)
 
-# --- 4. ADMIN STATS ---
+# --- 4. DETAILED ADMIN STATS (FIXED) ---
 def get_stats():
     data = load_json(DB_FILE)
     sales = load_json(SALES_FILE)
     wd = load_json(WD_FILE)
     today, month = time.strftime("%Y-%m-%d"), time.strftime("%Y-%m")
     
+    # Sales Stats
     t_sell, m_sell, l_sell = 0, 0, 0
     for s in (sales if isinstance(sales, list) else []):
         amt = s.get('amount', 0)
@@ -94,23 +97,33 @@ def get_stats():
         if s.get('date') == today: t_sell += amt
         if s.get('month') == month: m_sell += amt
         
+    # Withdrawal Stats
     t_wd, l_wd = 0, 0
     for w in (wd if isinstance(wd, list) else []):
         amt = w.get('amount', 0)
         l_wd += amt
         if w.get('date') == today: t_wd += amt
 
-    return (f"📊 <b>Skillclub Stats</b>\n\n"
-            f"💰 Today Sell: ₹{t_sell}\n"
-            f"📅 Month Sell: ₹{m_sell}\n"
-            f"📈 Total Sell: ₹{l_sell}\n"
-            f"👥 Total Users: {len(data)}")
+    return (f"📊 <b>Skillclub Master Stats</b>\n\n"
+            f"💰 <b>Today Sales:</b> ₹{t_sell}\n"
+            f"📅 <b>Monthly Sales:</b> ₹{m_sell}\n"
+            f"📈 <b>Total Sales:</b> ₹{l_sell}\n\n"
+            f"💸 <b>Today Payout:</b> ₹{t_wd}\n"
+            f"🏧 <b>Total Payout:</b> ₹{l_wd}\n\n"
+            f"👥 <b>Total Users:</b> {len(data)}\n"
+            f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
 
-# --- 5. MAIN MENU ---
+# --- 5. MAIN MENU (LEADERBOARD RESTORED) ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
-    markup.add(b[0], b[1]).add(b[2], b[3]).add(b[4], b[5])
+    # Row 1
+    markup.add(b[0], b[1])
+    # Row 2
+    markup.add(b[2], b[3])
+    # Row 3 (Leaderboard & Support)
+    markup.add(b[4], b[5])
+    
     if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
     return markup
 
@@ -122,7 +135,7 @@ def start_cmd(message):
         ref = args[1] if len(args) > 1 else None
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
     
-    # Fix Date if missing
+    # Fix Join Date
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
         
@@ -134,6 +147,7 @@ def start_cmd(message):
 def process_broadcast(message):
     data = load_json(DB_FILE)
     count = 0
+    bot.send_message(ADMIN_ID, "⏳ Broadcasting...")
     for uid in data:
         try:
             bot.copy_message(uid, ADMIN_ID, message.message_id)
@@ -202,7 +216,7 @@ def callbacks(call):
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
-        bot.register_next_step_handler(msg, add_supp_name) # Fix: use correct function
+        bot.register_next_step_handler(msg, add_supp_name)
     elif call.data == "adm_clear":
         save_json(SETTINGS_FILE, {"buttons": []})
         bot.send_message(uid, "✅ All buttons cleared!")
@@ -212,9 +226,10 @@ def callbacks(call):
         if c:
             data[uid]["pending_buy"] = cid
             save_json(DB_FILE, data)
+            # FIX: Detailed Payment Instruction
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=ADMIN_UPI), parse_mode="HTML")
+            
     elif call.data.startswith("app_"):
-        # Approve Logic
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
         c = load_json(COURSE_DB).get(cid)
@@ -225,7 +240,6 @@ def callbacks(call):
                 u_data[t_id]["status"] = "Paid"
                 log_transaction(SALES_FILE, c['price'])
                 
-                # Commission
                 l1 = u_data[t_id].get("referred_by")
                 if l1 and l1 in u_data:
                     u_data[l1]["balance"] += c.get("l1", 0)
@@ -234,7 +248,7 @@ def callbacks(call):
                     if l2 and l2 in u_data: u_data[l2]["balance"] += c.get("l2", 0)
                 
                 save_json(DB_FILE, u_data)
-                bot.send_message(t_id, "🥳 <b>Payment Approved!</b>", parse_mode="HTML")
+                bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
     elif call.data.startswith("rej_"):
@@ -303,12 +317,15 @@ def handle_menu(message):
     # USER
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
-        bot.send_message(uid, STRINGS[lang]["profile"].format(name=p['name'], status=p['status'], refs=p.get('referrals', 0), bal=p['balance'], date=p.get('join_date')), parse_mode="HTML")
+        # FIX: Date display
+        j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
+        bot.send_message(uid, STRINGS[lang]["profile"].format(name=p['name'], status=p['status'], refs=p.get('referrals', 0), bal=p['balance'], date=j_date), parse_mode="HTML")
 
     elif text in ["💰 वॉलेट", "💰 Wallet"]:
         bal = data[uid].get('balance', 0)
         m = types.InlineKeyboardMarkup()
         if bal >= 500: m.add(types.InlineKeyboardButton("💸 Withdraw", callback_data="ask_wd"))
+        # FIX: Min withdrawal message
         bot.send_message(uid, STRINGS[lang]["wallet_msg"].format(bal=bal), reply_markup=m, parse_mode="HTML")
 
     elif text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
@@ -320,11 +337,17 @@ def handle_menu(message):
             else: m.add(types.InlineKeyboardButton(f"🛒 {info['name']} - ₹{info['price']}", callback_data=f"buyinfo_{cid}"))
         bot.send_message(uid, STRINGS[lang]["buy_menu"], reply_markup=m, parse_mode="HTML")
 
+    elif text in ["🏆 लीडरबोर्ड", "🏆 Leaderboard"]:
+        u_list = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)[:10]
+        res = ""
+        for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
+        bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
+
     elif text in ["📞 सहायता", "📞 Support"]:
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
         if not btns:
-            bot.send_message(uid, "⚠️ No support options available.")
+            bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
         else:
             m = types.InlineKeyboardMarkup()
             for b in btns: m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b['url']))
