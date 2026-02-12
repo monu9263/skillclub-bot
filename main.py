@@ -10,7 +10,7 @@ import random
 
 # --- 1. कॉन्फ़िगरेशन (CONFIGURATION) ---
 API_TOKEN = os.getenv('API_TOKEN')
-ADMIN_ID = "8114779182"
+ADMIN_ID = "8114779182"  # आपकी एडमिन आईडी
 
 if not API_TOKEN:
     print("❌ ERROR: API_TOKEN not found!")
@@ -29,7 +29,7 @@ SETTINGS_FILE = 'settings.json'
 ADMIN_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
-# --- 2. STRINGS (UPDATED FIXES) ---
+# --- 2. STRINGS ---
 STRINGS = {
     "hi": {
         "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n1️⃣ '📚 कोर्स खरीदें' बटन दबाएं।\n2️⃣ पेमेंट करें।\n3️⃣ स्क्रीनशॉट भेजें।\n4️⃣ '🔗 इनवाइट लिंक' से लिंक बनाएं।",
@@ -37,9 +37,7 @@ STRINGS = {
         "lang_updated": "✅ भाषा <b>Hindi</b> में बदल दी गई है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n💰 <b>बैलेंस:</b> ₹{bal}\n👥 <b>रेफरल:</b> {refs}\n📅 <b>जॉइन डेट:</b> {date}",
         "buy_menu": "🎓 <b>हमारे उपलब्ध कोर्सेस चुनें:</b>",
-        # FIX: Payment Instruction Updated
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\nℹ️ <b>पेमेंट निर्देश:</b>\n1. नीचे दी गई UPI ID पर पेमेंट करें:\n   👉 <code>{upi}</code>\n\n2. पेमेंट का <b>स्क्रीनशॉट (Screenshot)</b> लें।\n3. वह स्क्रीनशॉट <b>इसी बोट में भेजें।</b>",
-        # FIX: Min Withdrawal Added
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n⚠️ <b>न्यूनतम विड्रॉल:</b> ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
         "invite_locked": "❌ <b>लिंक लॉक है!</b>\nपहले <b>कम से कम एक कोर्स खरीदें</b>।",
@@ -84,7 +82,7 @@ def log_transaction(filename, amount):
     logs.append({"amount": amount, "date": time.strftime("%Y-%m-%d"), "month": time.strftime("%Y-%m")})
     save_json(filename, logs)
 
-# --- 4. DETAILED ADMIN STATS (FIXED) ---
+# --- 4. ADMIN STATS ---
 def get_stats():
     data = load_json(DB_FILE)
     sales = load_json(SALES_FILE)
@@ -113,17 +111,13 @@ def get_stats():
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
 
-# --- 5. MAIN MENU (LEADERBOARD ADDED) ---
+# --- 5. MAIN MENU ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
-    # Row 1
     markup.add(b[0], b[1])
-    # Row 2
     markup.add(b[2], b[3])
-    # Row 3 (Leaderboard added)
     markup.add(b[4], b[5])
-    
     if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
     return markup
 
@@ -135,7 +129,6 @@ def start_cmd(message):
         ref = args[1] if len(args) > 1 else None
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
     
-    # FIX: Date Issue
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
         
@@ -144,18 +137,28 @@ def start_cmd(message):
     bot.send_message(uid, STRINGS[lang]["welcome"].format(name=data[uid]["name"]), reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
 
 # --- 6. ADMIN FUNCTIONS ---
+
+# (1) BROADCAST WITH HEADLINE
 def process_broadcast(message):
     data = load_json(DB_FILE)
     count = 0
     bot.send_message(ADMIN_ID, "⏳ Broadcasting...")
+    
     for uid in data:
         try:
-            bot.copy_message(uid, ADMIN_ID, message.message_id)
+            # FIX: Adding Announcement Headline
+            if message.content_type == 'text':
+                text = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.text}"
+                bot.send_message(uid, text, parse_mode="HTML")
+            elif message.content_type == 'photo':
+                caption = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.caption if message.caption else ''}"
+                bot.send_photo(uid, message.photo[-1].file_id, caption=caption, parse_mode="HTML")
             count += 1
             time.sleep(0.05)
         except: continue
     bot.send_message(ADMIN_ID, f"✅ Sent to {count} users.")
 
+# (2) COURSE MANAGEMENT (ADD / DELETE)
 def add_course_start(message):
     msg = bot.send_message(ADMIN_ID, "📝 Course Name:")
     bot.register_next_step_handler(msg, process_c_price)
@@ -190,45 +193,105 @@ def save_c(message, name, price, l1, l2):
     save_json(COURSE_DB, courses)
     bot.send_message(ADMIN_ID, f"✅ Course '{name}' Added!")
 
-# SUPPORT BUTTONS
+# (3) SUPPORT SETTINGS FIX
 def add_supp_name(message):
-    msg = bot.send_message(ADMIN_ID, "📝 Button Name:")
-    bot.register_next_step_handler(msg, add_supp_link)
-
-def add_supp_link(message):
     name = message.text
-    msg = bot.send_message(ADMIN_ID, f"🔗 URL for '{name}':")
-    bot.register_next_step_handler(msg, save_supp, name)
+    msg = bot.send_message(ADMIN_ID, f"🔗 Enter Link (URL) for '{name}':")
+    # FIX: Passing 'name' to the next step correctly
+    bot.register_next_step_handler(msg, add_supp_link, name)
 
-def save_supp(message, name):
+def add_supp_link(message, name):
+    link = message.text
     settings = load_json(SETTINGS_FILE)
-    settings.setdefault("buttons", []).append({"name": name, "url": message.text})
+    settings.setdefault("buttons", []).append({"name": name, "url": link})
     save_json(SETTINGS_FILE, settings)
     bot.send_message(ADMIN_ID, f"✅ Button '{name}' Added!")
+
+# (4) SEARCH USER LOGIC
+def search_by_id(message):
+    uid = message.text.strip()
+    data = load_json(DB_FILE)
+    user = data.get(uid)
+    if user:
+        bot.send_message(ADMIN_ID, f"🔍 <b>Found:</b>\nName: {user['name']}\nBal: {user['balance']}", parse_mode="HTML")
+    else:
+        bot.send_message(ADMIN_ID, "❌ User ID not found.")
+
+def search_by_name(message):
+    name_query = message.text.lower().strip()
+    data = load_json(DB_FILE)
+    found = []
+    for uid, info in data.items():
+        if name_query in info['name'].lower():
+            found.append(f"🆔 {uid} | {info['name']}")
+    
+    if found:
+        res = "\n".join(found[:10]) # Show top 10
+        bot.send_message(ADMIN_ID, f"🔍 <b>Results:</b>\n\n{res}", parse_mode="HTML")
+    else:
+        bot.send_message(ADMIN_ID, "❌ No user found with that name.")
 
 # --- 7. HANDLERS ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
+    
+    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
+    
+    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
     elif call.data == "adm_clear":
         save_json(SETTINGS_FILE, {"buttons": []})
         bot.send_message(uid, "✅ All buttons cleared!")
+
+    # MANAGE COURSES
+    elif call.data == "c_add":
+        add_course_start(call.message)
+    elif call.data == "c_del":
+        courses = load_json(COURSE_DB)
+        if not courses:
+            bot.send_message(uid, "❌ No courses to delete.")
+            return
+        m = types.InlineKeyboardMarkup()
+        for cid, info in courses.items():
+            m.add(types.InlineKeyboardButton(f"🗑️ {info['name']}", callback_data=f"cdelconf_{cid}"))
+        bot.send_message(uid, "Select course to delete:", reply_markup=m)
+    
+    elif call.data.startswith("cdelconf_"):
+        cid = call.data.split('_')[1]
+        courses = load_json(COURSE_DB)
+        if cid in courses:
+            name = courses[cid]['name']
+            del courses[cid]
+            save_json(COURSE_DB, courses)
+            bot.send_message(uid, f"✅ Course '{name}' Deleted.")
+        else:
+            bot.send_message(uid, "❌ Error: Course not found.")
+
+    # SEARCH USER
+    elif call.data == "s_id":
+        msg = bot.send_message(uid, "🔍 Enter User ID:")
+        bot.register_next_step_handler(msg, search_by_id)
+    elif call.data == "s_name":
+        msg = bot.send_message(uid, "🔍 Enter Name:")
+        bot.register_next_step_handler(msg, search_by_name)
+
+    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
         if c:
             data[uid]["pending_buy"] = cid
             save_json(DB_FILE, data)
-            # FIX: Message now asks for screenshot
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=ADMIN_UPI), parse_mode="HTML")
             
+    # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -251,11 +314,7 @@ def callbacks(call):
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
-    elif call.data.startswith("rej_"):
-        t_id = call.data.split('_')[1]
-        bot.send_message(t_id, "❌ Payment Rejected.")
-        bot.edit_message_caption("❌ REJECTED", ADMIN_ID, call.message.message_id)
-
+    # WITHDRAWAL
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -275,6 +334,11 @@ def callbacks(call):
             bot.send_message(t_id, "✅ Withdrawal Successful!")
             bot.edit_message_caption(f"✅ PAID ₹{amt}", ADMIN_ID, call.message.message_id)
 
+    elif call.data.startswith("wdrej_"):
+        t_id = call.data.split('_')[1]
+        bot.send_message(t_id, "❌ Withdrawal Rejected.")
+        bot.edit_message_caption("❌ REJECTED", ADMIN_ID, call.message.message_id)
+
 def process_withdrawal(message, amt):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{message.chat.id}_{amt}"),
@@ -289,35 +353,49 @@ def handle_menu(message):
     if uid not in data: return
     lang = data[uid].get("lang", "hi")
 
-    # ADMIN
+    # ADMIN PANEL
     if text == "🛠 Admin Panel" and uid == ADMIN_ID:
         m = types.ReplyKeyboardMarkup(resize_keyboard=True)
         m.add("📊 Stats", "📢 Broadcast")
-        m.add("📥 Export Data", "➕ Add Course")
+        # FIX: Renamed to Manage Courses
+        m.add("📥 Export Data", "🎓 Manage Courses")
         m.add("📞 Support Settings", "👤 Search User")
         m.add("🔙 Back to Main Menu")
         bot.send_message(uid, "🛠 Admin Panel:", reply_markup=m)
     
     elif text == "📊 Stats" and uid == ADMIN_ID: bot.send_message(uid, get_stats(), parse_mode="HTML")
+    
+    # FIX: Broadcast Logic
     elif text == "📢 Broadcast" and uid == ADMIN_ID:
-        msg = bot.send_message(uid, "📢 Send Message:")
+        msg = bot.send_message(uid, "📢 Send Message to Broadcast (Text/Photo):")
         bot.register_next_step_handler(msg, process_broadcast)
-    elif text == "➕ Add Course" and uid == ADMIN_ID: add_course_start(message)
+    
+    # FIX: Manage Courses (Add/Delete)
+    elif text == "🎓 Manage Courses" and uid == ADMIN_ID:
+        m = types.InlineKeyboardMarkup()
+        m.add(types.InlineKeyboardButton("➕ Add New", callback_data="c_add"),
+              types.InlineKeyboardButton("🗑️ Delete Course", callback_data="c_del"))
+        bot.send_message(uid, "🎓 Course Management:", reply_markup=m)
+        
     elif text == "📞 Support Settings" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), types.InlineKeyboardButton("🗑️ Clear All", callback_data="adm_clear"))
         bot.send_message(uid, "⚙️ Settings:", reply_markup=m)
+    
     elif text == "📥 Export Data" and uid == ADMIN_ID:
         if os.path.exists(DB_FILE): bot.send_document(uid, open(DB_FILE, 'rb'))
         if os.path.exists(SALES_FILE): bot.send_document(uid, open(SALES_FILE, 'rb'))
+    
+    # FIX: Search User Options
     elif text == "👤 Search User" and uid == ADMIN_ID:
-        msg = bot.send_message(uid, "🔍 Enter User ID:")
-        bot.register_next_step_handler(msg, lambda m: bot.send_message(uid, str(load_json(DB_FILE).get(m.text.strip(), "Not Found"))))
+        m = types.InlineKeyboardMarkup()
+        m.add(types.InlineKeyboardButton("🆔 By ID", callback_data="s_id"),
+              types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
+        bot.send_message(uid, "🔍 Search User By:", reply_markup=m)
 
-    # USER
+    # USER MENU
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
-        # FIX: Date display
         j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
         bot.send_message(uid, STRINGS[lang]["profile"].format(name=p['name'], status=p['status'], refs=p.get('referrals', 0), bal=p['balance'], date=j_date), parse_mode="HTML")
 
@@ -325,7 +403,6 @@ def handle_menu(message):
         bal = data[uid].get('balance', 0)
         m = types.InlineKeyboardMarkup()
         if bal >= 500: m.add(types.InlineKeyboardButton("💸 Withdraw", callback_data="ask_wd"))
-        # FIX: Min withdrawal message added
         bot.send_message(uid, STRINGS[lang]["wallet_msg"].format(bal=bal), reply_markup=m, parse_mode="HTML")
 
     elif text in ["📚 कोर्स खरीदें", "📚 Buy Course"]:
@@ -347,7 +424,6 @@ def handle_menu(message):
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
         if not btns:
-            # FIX: Only "Contact Admin" if empty
             bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
         else:
             m = types.InlineKeyboardMarkup()
@@ -369,34 +445,4 @@ def handle_menu(message):
         bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
 
 @bot.message_handler(content_types=['photo'])
-def handle_photo(message):
-    uid = str(message.chat.id)
-    data = load_json(DB_FILE)
-    pending_cid = data.get(uid, {}).get("pending_buy")
-    if pending_cid:
-        courses = load_json(COURSE_DB)
-        c_name = courses[pending_cid]['name'] if pending_cid in courses else "Unknown"
-        m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
-              types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: {uid}\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
-        bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
-
-# --- 8. SERVER (With Exception Handling) ---
-@app.route('/')
-def home(): return "Bot Live"
-
-def run_server():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-if __name__ == "__main__":
-    Thread(target=run_server).start()
-    print("🚀 Bot starting...")
-    bot.remove_webhook()
-    time.sleep(1)
-    while True:
-        try: bot.polling(none_stop=True, skip_pending=True, timeout=60)
-        except Exception as e:
-            print(f"⚠️ Error: {e}")
-            time.sleep(5)
+de
