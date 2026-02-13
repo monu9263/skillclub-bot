@@ -245,18 +245,44 @@ def search_by_name(message):
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
     
+    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
+    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
-    elif call.data == "adm_clear":
-        save_json(SETTINGS_FILE, {"buttons": [], "upi": get_upi()})
-        bot.send_message(uid, "✅ All buttons cleared!")
+    
+    # NEW DELETE LOGIC (SELECT TO DELETE)
+    elif call.data == "adm_del_menu":
+        settings = load_json(SETTINGS_FILE)
+        btns = settings.get("buttons", [])
+        if not btns:
+            bot.send_message(uid, "❌ No buttons to delete.")
+            return
+        
+        m = types.InlineKeyboardMarkup()
+        for i, b in enumerate(btns):
+            m.add(types.InlineKeyboardButton(f"🗑️ Delete: {b['name']}", callback_data=f"del_supp_{i}"))
+        bot.send_message(uid, "👇 Select button to delete:", reply_markup=m)
 
+    elif call.data.startswith("del_supp_"):
+        try:
+            idx = int(call.data.split('_')[2])
+            settings = load_json(SETTINGS_FILE)
+            if 0 <= idx < len(settings["buttons"]):
+                removed = settings["buttons"].pop(idx)
+                save_json(SETTINGS_FILE, settings)
+                bot.send_message(uid, f"✅ Button '{removed['name']}' Deleted!")
+            else:
+                bot.send_message(uid, "❌ Button already deleted.")
+        except:
+            bot.send_message(uid, "❌ Error deleting button.")
+
+    # MANAGE COURSES
     elif call.data == "c_add":
         add_course_start(call.message)
     elif call.data == "c_del":
@@ -280,6 +306,7 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Error: Course not found.")
 
+    # SEARCH USER
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
@@ -287,6 +314,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
+    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
@@ -296,6 +324,7 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
+    # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -318,6 +347,7 @@ def callbacks(call):
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
+    # WITHDRAWAL
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -378,7 +408,9 @@ def handle_menu(message):
         
     elif text == "📞 Support Settings" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), types.InlineKeyboardButton("🗑️ Clear All", callback_data="adm_clear"))
+        # FIX: Changed 'Clear All' to 'Delete Button'
+        m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), 
+              types.InlineKeyboardButton("🗑️ Delete Button", callback_data="adm_del_menu"))
         bot.send_message(uid, "⚙️ Settings:", reply_markup=m)
     
     elif text == "💳 Change UPI" and uid == ADMIN_ID:
@@ -417,8 +449,7 @@ def handle_menu(message):
         bot.send_message(uid, STRINGS[lang]["buy_menu"], reply_markup=m, parse_mode="HTML")
 
     elif text in ["🏆 लीडरबोर्ड", "🏆 Leaderboard"]:
-        u_list = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)[:10]
-        res = ""
+        u_list = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)[:10] res = ""
         for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
         bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
 
@@ -434,7 +465,6 @@ def handle_menu(message):
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
         m = types.InlineKeyboardMarkup()
-        # FIX: Complete Syntax Here
         m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", callback_data="setlang_en"))
         bot.send_message(uid, STRINGS[lang]["lang_select"], reply_markup=m, parse_mode="HTML")
 
@@ -483,5 +513,7 @@ if __name__ == "__main__":
     if WEBHOOK_URL:
         run_server()
     else:
+        # Local fallback
         bot.remove_webhook()
         bot.polling(none_stop=True)
+     
