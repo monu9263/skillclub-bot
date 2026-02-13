@@ -198,17 +198,32 @@ def save_c(message, name, price, l1, l2):
     save_json(COURSE_DB, courses)
     bot.send_message(ADMIN_ID, f"✅ Course '{name}' Added!")
 
+# SUPPORT - SMART LINK ADDER
 def add_supp_name(message):
     name = message.text
-    msg = bot.send_message(ADMIN_ID, f"🔗 Enter Link (URL) for '{name}':")
+    msg = bot.send_message(ADMIN_ID, f"🔗 Enter Link/Username for '{name}':\n(Ex: @username, t.me/user, or instagram.com)")
     bot.register_next_step_handler(msg, add_supp_link, name)
 
 def add_supp_link(message, name):
-    link = message.text
+    link = message.text.strip()
+    
+    # 1. Handle @username -> https://t.me/username
+    if link.startswith("@"):
+        link = f"https://t.me/{link[1:]}"
+    
+    # 2. Handle simple text (like 'skillclub_admin') -> https://t.me/skillclub_admin
+    # If no dot (.) and no slashes (/), assume it's a telegram username
+    elif "." not in link and "/" not in link:
+        link = f"https://t.me/{link}"
+
+    # 3. Handle websites without https://
+    elif not link.startswith(("http://", "https://", "tg://")):
+        link = f"https://{link}"
+        
     settings = load_json(SETTINGS_FILE)
     settings.setdefault("buttons", []).append({"name": name, "url": link})
     save_json(SETTINGS_FILE, settings)
-    bot.send_message(ADMIN_ID, f"✅ Button '{name}' Added!")
+    bot.send_message(ADMIN_ID, f"✅ Button '{name}' Added!\n🔗 Link: {link}")
 
 def change_upi_process(message):
     new_upi = message.text.strip()
@@ -244,15 +259,18 @@ def search_by_name(message):
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
     
+    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
+    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
     
+    # DELETE LOGIC
     elif call.data == "adm_del_menu":
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
@@ -278,6 +296,7 @@ def callbacks(call):
         except:
             bot.send_message(uid, "❌ Error deleting button.")
 
+    # MANAGE COURSES
     elif call.data == "c_add":
         add_course_start(call.message)
     elif call.data == "c_del":
@@ -301,6 +320,7 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Error: Course not found.")
 
+    # SEARCH USER
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
@@ -308,6 +328,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
+    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
@@ -317,6 +338,7 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
+    # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -339,6 +361,7 @@ def callbacks(call):
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
+    # WITHDRAWAL
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -418,6 +441,7 @@ def handle_menu(message):
               types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
         bot.send_message(uid, "🔍 Search User By:", reply_markup=m)
 
+    # USER MENU
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
         j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
@@ -444,15 +468,24 @@ def handle_menu(message):
         for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
         bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
 
+    # SUPPORT MENU (FIXED)
     elif text in ["📞 सहायता", "📞 Support"]:
-        settings = load_json(SETTINGS_FILE)
-        btns = settings.get("buttons", [])
-        if not btns:
-            bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
-        else:
-            m = types.InlineKeyboardMarkup()
-            for b in btns: m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b['url']))
-            bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
+        try:
+            settings = load_json(SETTINGS_FILE)
+            btns = settings.get("buttons", [])
+            
+            if not btns:
+                bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
+            else:
+                m = types.InlineKeyboardMarkup()
+                for b in btns: 
+                    # Ensure URL is safe
+                    b_url = b.get('url', 'https://telegram.org')
+                    m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b_url))
+                
+                bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
+        except Exception as e:
+            bot.send_message(uid, "⚠️ Error loading support buttons.")
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
         m = types.InlineKeyboardMarkup()
@@ -504,6 +537,6 @@ if __name__ == "__main__":
     if WEBHOOK_URL:
         run_server()
     else:
-        # Local fallback
         bot.remove_webhook()
         bot.polling(none_stop=True)
+    
