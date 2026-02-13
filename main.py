@@ -19,14 +19,14 @@ if not API_TOKEN:
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# DATA FILES
+# FILES
 DB_FILE = 'users.json'
 COURSE_DB = 'courses.json'
 SALES_FILE = 'sales_log.json'
 WD_FILE = 'withdrawals_log.json'
 SETTINGS_FILE = 'settings.json'
 
-# DEFAULT SETTINGS
+# DEFAULTS
 DEFAULT_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
@@ -141,7 +141,6 @@ def start_cmd(message):
     save_json(DB_FILE, data)
     lang = data[uid].get("lang", "hi")
     
-    # Welcome Photo Logic
     try:
         bot.send_photo(uid, WELCOME_PHOTO, caption=STRINGS[lang]["welcome"].format(name=data[uid]["name"]), reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
     except:
@@ -246,13 +245,11 @@ def search_by_name(message):
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
     
-    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
-    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
@@ -260,7 +257,6 @@ def callbacks(call):
         save_json(SETTINGS_FILE, {"buttons": [], "upi": get_upi()})
         bot.send_message(uid, "✅ All buttons cleared!")
 
-    # MANAGE COURSES
     elif call.data == "c_add":
         add_course_start(call.message)
     elif call.data == "c_del":
@@ -284,7 +280,6 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Error: Course not found.")
 
-    # SEARCH USER
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
@@ -292,7 +287,6 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
-    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
@@ -302,7 +296,6 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
-    # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -325,7 +318,6 @@ def callbacks(call):
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
-    # WITHDRAWAL
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -364,7 +356,6 @@ def handle_menu(message):
     if uid not in data: return
     lang = data[uid].get("lang", "hi")
 
-    # ADMIN PANEL
     if text == "🛠 Admin Panel" and uid == ADMIN_ID:
         m = types.ReplyKeyboardMarkup(resize_keyboard=True)
         m.add("📊 Stats", "📢 Broadcast")
@@ -405,7 +396,6 @@ def handle_menu(message):
               types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
         bot.send_message(uid, "🔍 Search User By:", reply_markup=m)
 
-    # USER MENU
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
         j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
@@ -444,4 +434,54 @@ def handle_menu(message):
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", cal
+        # FIX: Complete Syntax Here
+        m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", callback_data="setlang_en"))
+        bot.send_message(uid, STRINGS[lang]["lang_select"], reply_markup=m, parse_mode="HTML")
+
+    elif text in ["🔗 इनवाइट लिंक", "🔗 Invite Link"]:
+        if not data[uid].get("purchased", []): bot.send_message(uid, STRINGS[lang]["invite_locked"], parse_mode="HTML")
+        else:
+            link = f"https://t.me/{bot.get_me().username}?start={uid}"
+            bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
+
+    elif text in ["🔙 Back to Main Menu", "🔙 वापस"]:
+        bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    uid = str(message.chat.id)
+    data = load_json(DB_FILE)
+    pending_cid = data.get(uid, {}).get("pending_buy")
+    if pending_cid:
+        courses = load_json(COURSE_DB)
+        c_name = courses[pending_cid]['name'] if pending_cid in courses else "Unknown"
+        m = types.InlineKeyboardMarkup()
+        m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
+              types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
+        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: {uid}\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
+        bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
+
+# --- 8. WEBHOOK ROUTES ---
+@app.route('/' + API_TOKEN, methods=['POST'])
+def getMessage():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
+@app.route("/")
+def webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=WEBHOOK_URL + "/" + API_TOKEN)
+    return "Webhook Set!", 200
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    if WEBHOOK_URL:
+        run_server()
+    else:
+        bot.remove_webhook()
+        bot.polling(none_stop=True)
