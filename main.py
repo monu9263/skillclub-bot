@@ -10,7 +10,7 @@ from flask import Flask, request
 # --- 1. CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = "8114779182"
-# Render URL (Environment Variable से अपने आप लेगा)
+# Render automatically provides this URL
 WEBHOOK_URL = os.getenv('RENDER_EXTERNAL_URL') 
 
 if not API_TOKEN:
@@ -19,29 +19,21 @@ if not API_TOKEN:
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# FILES
+# DATA FILES
 DB_FILE = 'users.json'
 COURSE_DB = 'courses.json'
 SALES_FILE = 'sales_log.json'
 WD_FILE = 'withdrawals_log.json'
 SETTINGS_FILE = 'settings.json'
 
-# DEFAULTS
+# DEFAULT SETTINGS
 DEFAULT_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
-# --- 2. STRINGS (UPDATED WELCOME MSG) ---
+# --- 2. STRINGS ---
 STRINGS = {
     "hi": {
-        "welcome": (
-            "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n"
-            "🚀 <b>शुरू कैसे करें? (Step-by-Step):</b>\n\n"
-            "1️⃣ नीचे <b>'📚 कोर्स खरीदें'</b> बटन पर क्लिक करें।\n"
-            "2️⃣ अपना पसंदीदा कोर्स चुनें और दी गई <b>UPI</b> पर पेमेंट करें।\n"
-            "3️⃣ पेमेंट का <b>स्क्रीनशॉट (Screenshot)</b> इसी बोट में भेजें।\n"
-            "4️⃣ एडमिन अप्रूवल के बाद, <b>'🔗 इनवाइट लिंक'</b> से अपना लिंक निकालें।\n"
-            "5️⃣ लिंक शेयर करें और <b>कमाना शुरू करें!</b> 💰"
-        ),
+        "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n1️⃣ '📚 कोर्स खरीदें' बटन दबाएं।\n2️⃣ पेमेंट करें।\n3️⃣ स्क्रीनशॉट भेजें।\n4️⃣ '🔗 इनवाइट लिंक' से लिंक बनाएं。",
         "lang_select": "🌐 <b>अपनी भाषा चुनें:</b>",
         "lang_updated": "✅ भाषा <b>Hindi</b> में बदल दी गई है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n💰 <b>बैलेंस:</b> ₹{bal}\n👥 <b>रेफरल:</b> {refs}\n📅 <b>जॉइन डेट:</b> {date}",
@@ -56,15 +48,7 @@ STRINGS = {
         "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "📞 सहायता"]
     },
     "en": {
-        "welcome": (
-            "Hello {name}! Welcome to <b>Skillclub</b>. 🙏\n\n"
-            "🚀 <b>How to Start? (Steps):</b>\n\n"
-            "1️⃣ Click on <b>'📚 Buy Course'</b> button below.\n"
-            "2️⃣ Select a course and pay to the given <b>UPI ID</b>.\n"
-            "3️⃣ Send the <b>Payment Screenshot</b> here in this bot.\n"
-            "4️⃣ After approval, get your link from <b>'🔗 Invite Link'</b>.\n"
-            "5️⃣ Share & <b>Start Earning!</b> 💰"
-        ),
+        "welcome": "Hello {name}! Welcome to <b>Skillclub</b>. 🙏\n\n🚀 <b>Steps to Start:</b>\n1️⃣ Click '📚 Buy Course'.\n2️⃣ Pay via UPI.\n3️⃣ Send Screenshot here.",
         "lang_select": "🌐 <b>Choose your language:</b>",
         "lang_updated": "✅ Language updated to <b>English</b>.",
         "profile": "👤 <b>Name:</b> {name}\n🏆 <b>Status:</b> {status}\n💰 <b>Balance:</b> ₹{bal}\n👥 <b>Referrals:</b> {refs}\n📅 <b>Joined:</b> {date}",
@@ -262,11 +246,13 @@ def search_by_name(message):
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
     
+    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
+    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
@@ -274,6 +260,7 @@ def callbacks(call):
         save_json(SETTINGS_FILE, {"buttons": [], "upi": get_upi()})
         bot.send_message(uid, "✅ All buttons cleared!")
 
+    # MANAGE COURSES
     elif call.data == "c_add":
         add_course_start(call.message)
     elif call.data == "c_del":
@@ -297,6 +284,7 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Error: Course not found.")
 
+    # SEARCH USER
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
@@ -304,6 +292,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
+    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
@@ -313,6 +302,7 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
+    # PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -335,6 +325,7 @@ def callbacks(call):
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
                 bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
 
+    # WITHDRAWAL
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -373,6 +364,7 @@ def handle_menu(message):
     if uid not in data: return
     lang = data[uid].get("lang", "hi")
 
+    # ADMIN PANEL
     if text == "🛠 Admin Panel" and uid == ADMIN_ID:
         m = types.ReplyKeyboardMarkup(resize_keyboard=True)
         m.add("📊 Stats", "📢 Broadcast")
@@ -413,6 +405,7 @@ def handle_menu(message):
               types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
         bot.send_message(uid, "🔍 Search User By:", reply_markup=m)
 
+    # USER MENU
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
         j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
@@ -443,4 +436,12 @@ def handle_menu(message):
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
         if not btns:
-            bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>"
+            bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
+        else:
+            m = types.InlineKeyboardMarkup()
+            for b in btns: m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b['url']))
+            bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
+
+    elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
+        m = types.InlineKeyboardMarkup()
+        m.add(types.InlineKeyboardButton("🇮🇳 Hindi", callback_data="setlang_hi"), types.InlineKeyboardButton("🇺🇸 English", cal
