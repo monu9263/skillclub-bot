@@ -116,8 +116,7 @@ def get_stats():
             f"🏧 <b>Total Payout:</b> ₹{l_wd}\n\n"
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
-
-# --- 5. MAIN MENU ---
+    # --- 5. MAIN MENU ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
@@ -256,7 +255,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
     
-    # NEW DELETE LOGIC (SELECT TO DELETE)
+    # DELETE LOGIC
     elif call.data == "adm_del_menu":
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
@@ -408,7 +407,6 @@ def handle_menu(message):
         
     elif text == "📞 Support Settings" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
-        # FIX: Changed 'Clear All' to 'Delete Button'
         m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), 
               types.InlineKeyboardButton("🗑️ Delete Button", callback_data="adm_del_menu"))
         bot.send_message(uid, "⚙️ Settings:", reply_markup=m)
@@ -449,7 +447,8 @@ def handle_menu(message):
         bot.send_message(uid, STRINGS[lang]["buy_menu"], reply_markup=m, parse_mode="HTML")
 
     elif text in ["🏆 लीडरबोर्ड", "🏆 Leaderboard"]:
-        u_list = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)[:10] res = ""
+        u_list = sorted(data.items(), key=lambda x: x[1].get('referrals', 0), reverse=True)[:10]
+        res = ""
         for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
         bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
 
@@ -516,4 +515,3 @@ if __name__ == "__main__":
         # Local fallback
         bot.remove_webhook()
         bot.polling(none_stop=True)
-     
