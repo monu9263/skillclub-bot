@@ -528,7 +528,14 @@ def webhook():
     bot.remove_webhook()
     bot.set_webhook(url=WEBHOOK_URL + "/" + API_TOKEN)
     return "Webhook Set!", 200
-
+# --- BRIDGE: DATA API ---
+@app.route('/api/user/<uid>', methods=['GET'])
+def api_user_data(uid):
+    """Support Bot इस लिंक से डेटा मांग सकता है"""
+    data = load_json(DB_FILE)
+    user = data.get(str(uid), {})
+    return json.dumps(user), 200, {'Content-Type': 'application/json'}
+    
 def run_server():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
