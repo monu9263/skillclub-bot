@@ -116,7 +116,7 @@ def get_stats():
             f"🏧 <b>Total Payout:</b> ₹{l_wd}\n\n"
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
-    # --- 5. MAIN MENU ---
+        # --- 5. MAIN MENU ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
@@ -132,8 +132,18 @@ def start_cmd(message):
     if uid not in data:
         args = message.text.split()
         ref = args[1] if len(args) > 1 else None
+        
+        # User Data Create
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
-    
+        
+        # 🔥 NEW: SEND NOTIFICATION TO REFERRER (When user joins)
+        if ref and ref in data and str(ref) != uid:
+            try:
+                notif_msg = f"🎉 <b>नया रेफरल (New Referral)!</b>\n\n👤 <b>{message.from_user.first_name}</b> आपके लिंक से जुड़ गए हैं। जब वे कोई कोर्स खरीदेंगे, तो आपको कमीशन मिलेगा!"
+                bot.send_message(ref, notif_msg, parse_mode="HTML")
+            except:
+                pass # If user blocked bot, ignore
+
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
         
@@ -198,7 +208,6 @@ def save_c(message, name, price, l1, l2):
     save_json(COURSE_DB, courses)
     bot.send_message(ADMIN_ID, f"✅ Course '{name}' Added!")
 
-# SUPPORT - SMART LINK ADDER
 def add_supp_name(message):
     name = message.text
     msg = bot.send_message(ADMIN_ID, f"🔗 Enter Link/Username for '{name}':\n(Ex: @username, t.me/user, or instagram.com)")
@@ -206,19 +215,9 @@ def add_supp_name(message):
 
 def add_supp_link(message, name):
     link = message.text.strip()
-    
-    # 1. Handle @username -> https://t.me/username
-    if link.startswith("@"):
-        link = f"https://t.me/{link[1:]}"
-    
-    # 2. Handle simple text (like 'skillclub_admin') -> https://t.me/skillclub_admin
-    # If no dot (.) and no slashes (/), assume it's a telegram username
-    elif "." not in link and "/" not in link:
-        link = f"https://t.me/{link}"
-
-    # 3. Handle websites without https://
-    elif not link.startswith(("http://", "https://", "tg://")):
-        link = f"https://{link}"
+    if link.startswith("@"): link = f"https://t.me/{link[1:]}"
+    elif "." not in link and "/" not in link: link = f"https://t.me/{link}"
+    elif not link.startswith(("http://", "https://", "tg://")): link = f"https://{link}"
         
     settings = load_json(SETTINGS_FILE)
     settings.setdefault("buttons", []).append({"name": name, "url": link})
@@ -277,7 +276,6 @@ def callbacks(call):
         if not btns:
             bot.send_message(uid, "❌ No buttons to delete.")
             return
-        
         m = types.InlineKeyboardMarkup()
         for i, b in enumerate(btns):
             m.add(types.InlineKeyboardButton(f"🗑️ Delete: {b['name']}", callback_data=f"del_supp_{i}"))
@@ -291,10 +289,8 @@ def callbacks(call):
                 removed = settings["buttons"].pop(idx)
                 save_json(SETTINGS_FILE, settings)
                 bot.send_message(uid, f"✅ Button '{removed['name']}' Deleted!")
-            else:
-                bot.send_message(uid, "❌ Button already deleted.")
-        except:
-            bot.send_message(uid, "❌ Error deleting button.")
+            else: bot.send_message(uid, "❌ Button already deleted.")
+        except: bot.send_message(uid, "❌ Error deleting button.")
 
     # MANAGE COURSES
     elif call.data == "c_add":
@@ -317,8 +313,7 @@ def callbacks(call):
             del courses[cid]
             save_json(COURSE_DB, courses)
             bot.send_message(uid, f"✅ Course '{name}' Deleted.")
-        else:
-            bot.send_message(uid, "❌ Error: Course not found.")
+        else: bot.send_message(uid, "❌ Error: Course not found.")
 
     # SEARCH USER
     elif call.data == "s_id":
@@ -338,11 +333,12 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
-    # PAYMENT APPROVAL
+    # PAYMENT APPROVAL (WITH COMMISSION ALERTS)
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
         c = load_json(COURSE_DB).get(cid)
+        
         if c:
             u_data = load_json(DB_FILE)
             if t_id in u_data:
@@ -350,48 +346,113 @@ def callbacks(call):
                 u_data[t_id]["status"] = "Paid"
                 log_transaction(SALES_FILE, c['price'])
                 
+                # Fetch Buyer and Course Info for Notification
+                buyer_name = u_data[t_id].get("name", "Unknown")
+                course_name = c['name']
+                
                 l1 = u_data[t_id].get("referred_by")
                 if l1 and l1 in u_data:
-                    u_data[l1]["balance"] += c.get("l1", 0)
+                    l1_comm = c.get("l1", 0)
+                    u_data[l1]["balance"] += l1_comm
                     u_data[l1]["referrals"] = u_data[l1].get("referrals", 0) + 1
+                    
+                    # 🔥 NEW: ALERT LEVEL 1
+                    try:
+                        l1_msg = f"💸 <b>कमीशन प्राप्त हुआ! (Commission Added)</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l1_comm}</b> जोड़ दिए गए हैं।"
+                        bot.send_message(l1, l1_msg, parse_mode="HTML")
+                    except: pass
+                    
                     l2 = u_data[l1].get("referred_by")
-                    if l2 and l2 in u_data: u_data[l2]["balance"] += c.get("l2", 0)
+                    if l2 and l2 in u_data: 
+                        l2_comm = c.get("l2", 0)
+                        u_data[l2]["balance"] += l2_comm
+                        
+                        # 🔥 NEW: ALERT LEVEL 2
+                        try:
+                            l2_msg = f"💸 <b>Level-2 कमीशन प्राप्त हुआ!</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l2_comm}</b> जोड़ दिए गए हैं।"
+                            bot.send_message(l2, l2_msg, parse_mode="HTML")
+                        except: pass
                 
                 save_json(DB_FILE, u_data)
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
-                bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
+                try: bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
+                except: pass
 
-    # WITHDRAWAL
+    # WITHDRAWAL REQUEST
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
-            msg = bot.send_message(uid, "🏧 Enter UPI ID:")
+            msg = bot.send_message(uid, "🏧 <b>Enter UPI ID:</b>", parse_mode="HTML")
             bot.register_next_step_handler(msg, process_withdrawal, bal)
         else:
             bot.send_message(uid, "❌ Minimum withdrawal is ₹500.")
 
+    # WITHDRAWAL APPROVAL
     elif call.data.startswith("wdpay_"):
         parts = call.data.split('_')
         t_id, amt = parts[1], int(parts[2])
         u_data = load_json(DB_FILE)
+        
         if t_id in u_data:
-            u_data[t_id]["balance"] -= amt
+            if u_data[t_id].get("balance", 0) >= amt:
+                u_data[t_id]["balance"] -= amt
+            else:
+                amt = u_data[t_id].get("balance", 0)
+                u_data[t_id]["balance"] = 0
+            
             save_json(DB_FILE, u_data)
-            log_transaction(WD_FILE, amt)
-            bot.send_message(t_id, "✅ Withdrawal Successful!")
-            bot.edit_message_caption(f"✅ PAID ₹{amt}", ADMIN_ID, call.message.message_id)
+            
+            msg_text = call.message.text or ""
+            upi_match = re.search(r'UPI:\s*([^\n]+)', msg_text)
+            upi_id = upi_match.group(1).strip() if upi_match else "Unknown"
+            user_name = u_data[t_id].get('name', 'Unknown')
+            
+            wd_logs = load_json(WD_FILE)
+            if not isinstance(wd_logs, list): wd_logs = []
+            wd_logs.append({
+                "uid": t_id,
+                "name": user_name,
+                "amount": amt,
+                "upi": upi_id,
+                "date": time.strftime("%Y-%m-%d"),
+                "time": time.strftime("%H:%M:%S")
+            })
+            save_json(WD_FILE, wd_logs)
+            
+            bot.send_message(t_id, f"✅ Withdrawal of <b>₹{amt}</b> Successful!\nYour amount will be credited soon.", parse_mode="HTML")
+            try:
+                bot.edit_message_text(f"✅ <b>PAID ₹{amt}</b> to {user_name}\n💳 UPI: <code>{upi_id}</code>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
+            except: pass
 
     elif call.data.startswith("wdrej_"):
         t_id = call.data.split('_')[1]
-        bot.send_message(t_id, "❌ Withdrawal Rejected.")
-        bot.edit_message_caption("❌ REJECTED", ADMIN_ID, call.message.message_id)
+        bot.send_message(t_id, "❌ Your Withdrawal Request was Rejected.")
+        try:
+            bot.edit_message_text("❌ <b>REJECTED</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
+        except: pass
 
+# --- ADVANCED PROCESS WITHDRAWAL ---
 def process_withdrawal(message, amt):
+    uid = str(message.chat.id)
+    upi_id = message.text.strip()
+    data = load_json(DB_FILE)
+    user = data.get(uid, {})
+    
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{message.chat.id}_{amt}"),
-               types.InlineKeyboardButton("❌ Reject", callback_data=f"wdrej_{message.chat.id}"))
-    bot.send_message(ADMIN_ID, f"🔔 <b>WD Request: ₹{amt}</b>\nUPI: <code>{message.text}</code>", reply_markup=markup, parse_mode="HTML")
-    bot.send_message(message.chat.id, "✅ Request Sent!")
+    markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{uid}_{amt}"),
+               types.InlineKeyboardButton("❌ Reject", callback_data=f"wdrej_{uid}"))
+    
+    admin_text = (
+        f"🔔 <b>New Withdrawal Request!</b>\n\n"
+        f"👤 <b>Name:</b> {user.get('name', 'Unknown')}\n"
+        f"🆔 <b>ID:</b> <code>{uid}</code>\n"
+        f"👥 <b>Total Referrals:</b> {user.get('referrals', 0)}\n"
+        f"💰 <b>Requested Amount:</b> ₹{amt}\n\n"
+        f"💳 <b>UPI:</b> <code>{upi_id}</code>"
+    )
+    
+    bot.send_message(ADMIN_ID, admin_text, reply_markup=markup, parse_mode="HTML")
+    bot.send_message(uid, "✅ Request Sent! Please wait for approval.")
 
 @bot.message_handler(func=lambda m: True)
 def handle_menu(message):
@@ -434,6 +495,7 @@ def handle_menu(message):
     elif text == "📥 Export Data" and uid == ADMIN_ID:
         if os.path.exists(DB_FILE): bot.send_document(uid, open(DB_FILE, 'rb'))
         if os.path.exists(SALES_FILE): bot.send_document(uid, open(SALES_FILE, 'rb'))
+        if os.path.exists(WD_FILE): bot.send_document(uid, open(WD_FILE, 'rb'))
     
     elif text == "👤 Search User" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
@@ -468,7 +530,7 @@ def handle_menu(message):
         for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
         bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
 
-    # SUPPORT MENU (FIXED)
+    # SUPPORT MENU
     elif text in ["📞 सहायता", "📞 Support"]:
         try:
             settings = load_json(SETTINGS_FILE)
@@ -479,12 +541,10 @@ def handle_menu(message):
             else:
                 m = types.InlineKeyboardMarkup()
                 for b in btns: 
-                    # Ensure URL is safe
                     b_url = b.get('url', 'https://telegram.org')
                     m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b_url))
-                
                 bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
-        except Exception as e:
+        except:
             bot.send_message(uid, "⚠️ Error loading support buttons.")
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
@@ -499,7 +559,7 @@ def handle_menu(message):
             bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
 
     elif text in ["🔙 Back to Main Menu", "🔙 वापस"]:
-        bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
+     bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
@@ -515,7 +575,7 @@ def handle_photo(message):
         bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: {uid}\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
         bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
 
-# --- 8. WEBHOOK ROUTES ---
+# --- 8. WEBHOOK & BRIDGE ROUTES ---
 @app.route('/' + API_TOKEN, methods=['POST'])
 def getMessage():
     json_string = request.get_data().decode('utf-8')
@@ -523,19 +583,19 @@ def getMessage():
     bot.process_new_updates([update])
     return "!", 200
 
+# BRIDGE FOR SUPPORT BOT
+@app.route('/api/user/<uid>', methods=['GET'])
+def api_user_data(uid):
+    data = load_json(DB_FILE)
+    user = data.get(str(uid), {})
+    return json.dumps(user), 200, {'Content-Type': 'application/json'}
+
 @app.route("/")
 def webhook():
     bot.remove_webhook()
     bot.set_webhook(url=WEBHOOK_URL + "/" + API_TOKEN)
     return "Webhook Set!", 200
-# --- BRIDGE: DATA API ---
-@app.route('/api/user/<uid>', methods=['GET'])
-def api_user_data(uid):
-    """Support Bot इस लिंक से डेटा मांग सकता है"""
-    data = load_json(DB_FILE)
-    user = data.get(str(uid), {})
-    return json.dumps(user), 200, {'Content-Type': 'application/json'}
-    
+
 def run_server():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
@@ -546,4 +606,3 @@ if __name__ == "__main__":
     else:
         bot.remove_webhook()
         bot.polling(none_stop=True)
-    
