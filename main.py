@@ -116,7 +116,8 @@ def get_stats():
             f"🏧 <b>Total Payout:</b> ₹{l_wd}\n\n"
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
-        # --- 5. MAIN MENU ---
+
+    # --- 5. MAIN MENU ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     b = STRINGS[lang]["btns"]
@@ -136,13 +137,13 @@ def start_cmd(message):
         # User Data Create
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
         
-        # 🔥 NEW: SEND NOTIFICATION TO REFERRER (When user joins)
+        # SEND NOTIFICATION TO REFERRER (When user joins)
         if ref and ref in data and str(ref) != uid:
             try:
                 notif_msg = f"🎉 <b>नया रेफरल (New Referral)!</b>\n\n👤 <b>{message.from_user.first_name}</b> आपके लिंक से जुड़ गए हैं। जब वे कोई कोर्स खरीदेंगे, तो आपको कमीशन मिलेगा!"
                 bot.send_message(ref, notif_msg, parse_mode="HTML")
             except:
-                pass # If user blocked bot, ignore
+                pass 
 
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
@@ -258,18 +259,15 @@ def search_by_name(message):
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
     
-    # LANGUAGE
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
         save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
-    # ADMIN SUPPORT
     elif call.data == "adm_add": 
         msg = bot.send_message(uid, "📝 Button Name:")
         bot.register_next_step_handler(msg, add_supp_name)
     
-    # DELETE LOGIC
     elif call.data == "adm_del_menu":
         settings = load_json(SETTINGS_FILE)
         btns = settings.get("buttons", [])
@@ -292,7 +290,6 @@ def callbacks(call):
             else: bot.send_message(uid, "❌ Button already deleted.")
         except: bot.send_message(uid, "❌ Error deleting button.")
 
-    # MANAGE COURSES
     elif call.data == "c_add":
         add_course_start(call.message)
     elif call.data == "c_del":
@@ -315,7 +312,6 @@ def callbacks(call):
             bot.send_message(uid, f"✅ Course '{name}' Deleted.")
         else: bot.send_message(uid, "❌ Error: Course not found.")
 
-    # SEARCH USER
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
@@ -323,7 +319,6 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
-    # BUY INFO
     elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
@@ -333,7 +328,7 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
-    # PAYMENT APPROVAL (WITH COMMISSION ALERTS)
+    # 🔥 COURSE PAYMENT APPROVAL (WITH ALERTS & BUTTON REMOVAL)
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -346,17 +341,15 @@ def callbacks(call):
                 u_data[t_id]["status"] = "Paid"
                 log_transaction(SALES_FILE, c['price'])
                 
-                # Fetch Buyer and Course Info for Notification
                 buyer_name = u_data[t_id].get("name", "Unknown")
                 course_name = c['name']
                 
+                # COMMISSION LOGIC
                 l1 = u_data[t_id].get("referred_by")
                 if l1 and l1 in u_data:
                     l1_comm = c.get("l1", 0)
                     u_data[l1]["balance"] += l1_comm
                     u_data[l1]["referrals"] = u_data[l1].get("referrals", 0) + 1
-                    
-                    # 🔥 NEW: ALERT LEVEL 1
                     try:
                         l1_msg = f"💸 <b>कमीशन प्राप्त हुआ! (Commission Added)</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l1_comm}</b> जोड़ दिए गए हैं।"
                         bot.send_message(l1, l1_msg, parse_mode="HTML")
@@ -366,8 +359,6 @@ def callbacks(call):
                     if l2 and l2 in u_data: 
                         l2_comm = c.get("l2", 0)
                         u_data[l2]["balance"] += l2_comm
-                        
-                        # 🔥 NEW: ALERT LEVEL 2
                         try:
                             l2_msg = f"💸 <b>Level-2 कमीशन प्राप्त हुआ!</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l2_comm}</b> जोड़ दिए गए हैं।"
                             bot.send_message(l2, l2_msg, parse_mode="HTML")
@@ -375,10 +366,32 @@ def callbacks(call):
                 
                 save_json(DB_FILE, u_data)
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
-                try: bot.edit_message_caption("✅ APPROVED", ADMIN_ID, call.message.message_id)
+                
+                # UPDATE ADMIN MESSAGE AND REMOVE BUTTONS
+                try: 
+                    bot.edit_message_caption(
+                        caption=f"✅ <b>APPROVED</b>\nUser: <code>{t_id}</code>\nCourse: {course_name}", 
+                        chat_id=ADMIN_ID, 
+                        message_id=call.message.message_id, 
+                        reply_markup=None, 
+                        parse_mode="HTML"
+                    )
                 except: pass
 
-    # WITHDRAWAL REQUEST
+    # 🔥 COURSE PAYMENT REJECT
+    elif call.data.startswith("rej_"):
+        t_id = call.data.split('_')[1]
+        bot.send_message(t_id, "❌ <b>Payment Rejected!</b>\nआपका पेमेंट स्क्रीनशॉट अमान्य है। कृपया सपोर्ट टीम से बात करें।", parse_mode="HTML")
+        try:
+            bot.edit_message_caption(
+                caption=f"❌ <b>REJECTED</b>\nUser: <code>{t_id}</code>", 
+                chat_id=ADMIN_ID, 
+                message_id=call.message.message_id, 
+                reply_markup=None, 
+                parse_mode="HTML"
+            )
+        except: pass
+
     elif call.data == "ask_wd":
         bal = data[uid].get('balance', 0)
         if bal >= 500:
@@ -387,7 +400,7 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Minimum withdrawal is ₹500.")
 
-    # WITHDRAWAL APPROVAL
+    # 🔥 WITHDRAWAL APPROVAL (FIXED NEGATIVE BALANCE, LOGS & BUTTON REMOVAL)
     elif call.data.startswith("wdpay_"):
         parts = call.data.split('_')
         t_id, amt = parts[1], int(parts[2])
@@ -421,17 +434,29 @@ def callbacks(call):
             
             bot.send_message(t_id, f"✅ Withdrawal of <b>₹{amt}</b> Successful!\nYour amount will be credited soon.", parse_mode="HTML")
             try:
-                bot.edit_message_text(f"✅ <b>PAID ₹{amt}</b> to {user_name}\n💳 UPI: <code>{upi_id}</code>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
+                bot.edit_message_text(
+                    text=f"✅ <b>PAID ₹{amt}</b> to {user_name}\n💳 UPI: <code>{upi_id}</code>", 
+                    chat_id=ADMIN_ID, 
+                    message_id=call.message.message_id, 
+                    reply_markup=None, 
+                    parse_mode="HTML"
+                )
             except: pass
 
+    # 🔥 WITHDRAWAL REJECT
     elif call.data.startswith("wdrej_"):
         t_id = call.data.split('_')[1]
         bot.send_message(t_id, "❌ Your Withdrawal Request was Rejected.")
         try:
-            bot.edit_message_text("❌ <b>REJECTED</b>", ADMIN_ID, call.message.message_id, parse_mode="HTML")
+            bot.edit_message_text(
+                text=f"❌ <b>REJECTED</b>\nWithdrawal for User: <code>{t_id}</code>", 
+                chat_id=ADMIN_ID, 
+                message_id=call.message.message_id, 
+                reply_markup=None, 
+                parse_mode="HTML"
+            )
         except: pass
 
-# --- ADVANCED PROCESS WITHDRAWAL ---
 def process_withdrawal(message, amt):
     uid = str(message.chat.id)
     upi_id = message.text.strip()
@@ -530,12 +555,10 @@ def handle_menu(message):
         for i, (k, v) in enumerate(u_list, 1): res += f"{i}. <b>{v['name']}</b> - {v.get('referrals', 0)} Refs\n"
         bot.send_message(uid, STRINGS[lang]["leaderboard"].format(list=res), parse_mode="HTML")
 
-    # SUPPORT MENU
     elif text in ["📞 सहायता", "📞 Support"]:
         try:
             settings = load_json(SETTINGS_FILE)
             btns = settings.get("buttons", [])
-            
             if not btns:
                 bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
             else:
@@ -559,7 +582,7 @@ def handle_menu(message):
             bot.send_message(uid, STRINGS[lang]["invite"].format(link=link), parse_mode="HTML")
 
     elif text in ["🔙 Back to Main Menu", "🔙 वापस"]:
-     bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
+        bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
@@ -572,7 +595,7 @@ def handle_photo(message):
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
               types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: {uid}\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
+        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: <code>{uid}</code>\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
         bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
 
 # --- 8. WEBHOOK & BRIDGE ROUTES ---
@@ -606,3 +629,4 @@ if __name__ == "__main__":
     else:
         bot.remove_webhook()
         bot.polling(none_stop=True)
+                
