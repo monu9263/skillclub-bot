@@ -253,7 +253,32 @@ def search_by_name(message):
         bot.send_message(ADMIN_ID, f"🔍 <b>Results:</b>\n\n{res}", parse_mode="HTML")
     else:
         bot.send_message(ADMIN_ID, "❌ No user found.")
+# --- EDIT BALANCE FUNCTIONS ---
+def ask_bal_amount(message):
+    target_uid = message.text.strip()
+    data = load_json(DB_FILE)
+    if target_uid in data:
+        current_bal = data[target_uid].get('balance', 0)
+        msg = bot.send_message(ADMIN_ID, f"👤 <b>User:</b> {data[target_uid]['name']}\n💰 <b>Current Balance:</b> ₹{current_bal}\n\n👇 <b>Enter New Balance (Example: 500 या 0):</b>", parse_mode="HTML")
+        bot.register_next_step_handler(msg, save_new_bal, target_uid)
+    else:
+        bot.send_message(ADMIN_ID, "❌ User ID not found in database.")
 
+def save_new_bal(message, target_uid):
+    try:
+        new_bal = int(message.text.strip())
+        data = load_json(DB_FILE)
+        if target_uid in data:
+            data[target_uid]['balance'] = new_bal
+            save_json(DB_FILE, data)
+            bot.send_message(ADMIN_ID, f"✅ <b>Success!</b> {data[target_uid]['name']}'s new balance is <b>₹{new_bal}</b>", parse_mode="HTML")
+            
+            # यूज़र को नोटिफिकेशन भेजें (Optional)
+            try:
+                bot.send_message(target_uid, f"💰 <b>Wallet Update:</b> आपके वॉलेट का नया बैलेंस <b>₹{new_bal}</b> कर दिया गया है।", parse_mode="HTML")
+            except: pass
+    except:
+        bot.send_message(ADMIN_ID, "❌ Error! Please enter a valid number.")
 # --- 7. HANDLERS ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
@@ -491,7 +516,8 @@ def handle_menu(message):
         m.add("📊 Stats", "📢 Broadcast")
         m.add("📥 Export Data", "🎓 Manage Courses")
         m.add("📞 Support Settings", "👤 Search User")
-        m.add("💳 Change UPI", "🔙 Back to Main Menu")
+        m.add("💳 Change UPI", "💰 Edit Balance") # <-- नया बटन यहाँ है
+        m.add("🔙 Back to Main Menu")
         bot.send_message(uid, "🛠 Admin Panel:", reply_markup=m)
     
     elif text == "📊 Stats" and uid == ADMIN_ID: bot.send_message(uid, get_stats(), parse_mode="HTML")
@@ -516,6 +542,10 @@ def handle_menu(message):
         current = get_upi()
         msg = bot.send_message(uid, f"💳 <b>Current UPI:</b> <code>{current}</code>\n\n👇 <b>Enter New UPI ID:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, change_upi_process)
+
+    elif text == "💰 Edit Balance" and uid == ADMIN_ID:
+        msg = bot.send_message(uid, "📝 <b>Enter User ID:</b>", parse_mode="HTML")
+        bot.register_next_step_handler(msg, ask_bal_amount)
 
     elif text == "📥 Export Data" and uid == ADMIN_ID:
         if os.path.exists(DB_FILE): bot.send_document(uid, open(DB_FILE, 'rb'))
