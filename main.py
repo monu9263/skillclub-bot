@@ -589,15 +589,54 @@ def handle_photo(message):
     uid = str(message.chat.id)
     data = load_json(DB_FILE)
     pending_cid = data.get(uid, {}).get("pending_buy")
+    
     if pending_cid:
+        # स्क्रीनशॉट सेव करें और UTR मांगें
+        data[uid]["pending_photo"] = message.photo[-1].file_id
+        save_json(DB_FILE, data)
+        
+        msg = bot.send_message(uid, "✅ <b>स्क्रीनशॉट मिल गया!</b>\n\nकृपया अपने पेमेंट का <b>12-अंकों का UTR (Reference) नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
+        bot.register_next_step_handler(msg, process_utr)
+
+def process_utr(message):
+    uid = str(message.chat.id)
+    
+    # अगर यूज़र ने टेक्स्ट की जगह कुछ और भेजा है
+    if message.content_type != 'text':
+        msg = bot.send_message(uid, "❌ <b>गलत इनपुट!</b>\nकृपया केवल <b>UTR नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
+        bot.register_next_step_handler(msg, process_utr)
+        return
+
+    utr_number = message.text.strip()
+    data = load_json(DB_FILE)
+    
+    pending_cid = data.get(uid, {}).get("pending_buy")
+    photo_id = data.get(uid, {}).get("pending_photo")
+    
+    if pending_cid and photo_id:
         courses = load_json(COURSE_DB)
         c_name = courses[pending_cid]['name'] if pending_cid in courses else "Unknown"
+        
+        # एडमिन को UTR के साथ फोटो भेजना
         m = types.InlineKeyboardMarkup()
         m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
               types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"📩 <b>New Payment!</b>\nUser: <code>{uid}</code>\nCourse: {c_name}", reply_markup=m, parse_mode="HTML")
-        bot.send_message(uid, "✅ Screenshot received! Wait for approval.")
-
+        
+        admin_caption = (
+            f"📩 <b>New Payment Received!</b>\n\n"
+            f"👤 <b>User:</b> <code>{uid}</code>\n"
+            f"🎓 <b>Course:</b> {c_name}\n"
+            f"🔢 <b>UTR No:</b> <code>{utr_number}</code>"
+        )
+        
+        bot.send_photo(ADMIN_ID, photo_id, caption=admin_caption, reply_markup=m, parse_mode="HTML")
+        bot.send_message(uid, "✅ <b>डिटेल्स भेज दी गई हैं!</b>\nकृपया एडमिन के अप्रूवल का इंतज़ार करें।", parse_mode="HTML")
+        
+        # पेंडिंग फोटो डेटा से हटा दें (सफाई)
+        if "pending_photo" in data[uid]:
+            del data[uid]["pending_photo"]
+            save_json(DB_FILE, data)
+            
 # --- 8. WEBHOOK & BRIDGE ROUTES ---
 @app.route('/' + API_TOKEN, methods=['POST'])
 def getMessage():
