@@ -6,6 +6,7 @@ import re
 import time
 import random
 import pymongo
+import certifi  # <--- 🔥 यह नया जोड़ा गया है
 from flask import Flask, request
 
 # --- 1. CONFIGURATION ---
@@ -66,7 +67,8 @@ STRINGS = {
 
 # --- 3. MONGODB DATA MANAGER ---
 if MONGO_URI:
-    client = pymongo.MongoClient(MONGO_URI)
+    # 🔥 यहाँ tlsCAFile=certifi.where() जोड़ा गया है ताकि SSL एरर ना आये
+    client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     db = client['skillclub_bot']
     users_col = db['users']
     courses_col = db['courses']
