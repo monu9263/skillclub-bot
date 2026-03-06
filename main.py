@@ -5,35 +5,35 @@ import os
 import re
 import time
 import random
+import pymongo
 from flask import Flask, request
 
 # --- 1. CONFIGURATION ---
 API_TOKEN = os.getenv('API_TOKEN')
 ADMIN_ID = "8114779182"
-# Render automatically provides this URL
 WEBHOOK_URL = os.getenv('RENDER_EXTERNAL_URL') 
+MONGO_URI = os.getenv('MONGO_URI')
 
-if not API_TOKEN:
-    print("❌ ERROR: API_TOKEN not found!")
+if not API_TOKEN: print("❌ ERROR: API_TOKEN not found!")
+if not MONGO_URI: print("⚠️ WARNING: MONGO_URI not found! Bot won't save data to Cloud.")
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# FILES
+# FILES (Used as keys for DB)
 DB_FILE = 'users.json'
 COURSE_DB = 'courses.json'
 SALES_FILE = 'sales_log.json'
 WD_FILE = 'withdrawals_log.json'
 SETTINGS_FILE = 'settings.json'
 
-# DEFAULTS
 DEFAULT_UPI = "anand1312@fam" 
 WELCOME_PHOTO = "https://files.catbox.moe/0v601y.png" 
 
 # --- 2. STRINGS ---
 STRINGS = {
     "hi": {
-        "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏\n\n🚀 <b>शुरू करने के लिए स्टेप्स:</b>\n1️⃣ '📚 कोर्स खरीदें' बटन दबाएं।\n2️⃣ पेमेंट करें।\n3️⃣ स्क्रीनशॉट भेजें।\n4️⃣ '🔗 इनवाइट लिंक' से लिंक बनाएं。",
+        "welcome": "नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏🎉\n\nयहाँ आप <b>Digital Skills</b> सीख सकते हैं और साथ ही <b>Refer & Earn</b> करके शानदार इनकम कर सकते हैं! 💸\n\n🚀 <b>कैसे शुरू करें?</b>\n1️⃣ सबसे पहले <b>'📚 कोर्स खरीदें'</b> बटन पर क्लिक करें और कोर्स चुनें।\n2️⃣ पेमेंट करके उसका <b>स्क्रीनशॉट (Screenshot)</b> इसी बोट में भेजें।\n3️⃣ एडमिन के अप्रूव करते ही आपको कोर्स मिल जाएगा और आपका <b>'🔗 इनवाइट लिंक'</b> अनलॉक हो जाएगा! 🔓\n\n💰 <b>पैसे कैसे कमाएं?</b>\nअपना 'इनवाइट लिंक' दोस्तों के साथ शेयर करें। जब भी कोई आपके लिंक से कोर्स खरीदेगा, आपको <b>सीधा कमीशन (Commission)</b> मिलेगा!\nआप अपनी कमाई <b>'💰 वॉलेट'</b> से सीधे अपने UPI/Bank में निकाल सकते हैं। 🥳\n\n📢 <b>नए अपडेट्स के लिए हमारे ग्रुप में ज़रूर जुड़ें:</b>\n👉 https://t.me/skillclubpartners\n\n👇 <b>शुरू करने के लिए नीचे दिए गए बटन्स का इस्तेमाल करें:</b>",
         "lang_select": "🌐 <b>अपनी भाषा चुनें:</b>",
         "lang_updated": "✅ भाषा <b>Hindi</b> में बदल दी गई है।",
         "profile": "👤 <b>नाम:</b> {name}\n🏆 <b>स्टेटस:</b> {status}\n💰 <b>बैलेंस:</b> ₹{bal}\n👥 <b>रेफरल:</b> {refs}\n📅 <b>जॉइन डेट:</b> {date}",
@@ -41,22 +41,22 @@ STRINGS = {
         "payment_instruction": "🚀 <b>कोर्स:</b> {cname}\n💰 <b>कीमत:</b> ₹{price}\n\nℹ️ <b>पेमेंट निर्देश:</b>\n1. नीचे दी गई UPI ID पर पेमेंट करें:\n   👉 <code>{upi}</code>\n\n2. पेमेंट का <b>स्क्रीनशॉट (Screenshot)</b> लें।\n3. वह स्क्रीनशॉट <b>इसी बोट में भेजें।</b>",
         "wallet_msg": "💰 <b>वॉलेट बैलेंस:</b> ₹{bal}\n⚠️ <b>न्यूनतम विड्रॉल:</b> ₹500",
         "invite": "🔥 <b>आपका लिंक:</b>\n{link}\n\nइसे प्रमोट करें और डेली अर्न करें!",
-        "invite_locked": "❌ <b>लिंक लॉक है!</b>\nपहले <b>कम से कम एक कोर्स खरीदें</b>।",
+        "invite_locked": "❌ <b>लिंक लॉक है!</b>\nरेफर करके पैसे कमाने के लिए पहले <b>कम से कम एक कोर्स खरीदें</b>।",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "support_msg": "📞 <b>सपोर्ट सेंटर:</b>\nनीचे दिए गए विकल्पों पर क्लिक करें:",
         "leaderboard": "🏆 <b>टॉप 10 लीडरबोर्ड (Top Referrers):</b>\n\n{list}",
         "btns": ["👤 प्रोफाइल", "🔗 इनवाइट लिंक", "💰 वॉलेट", "📚 कोर्स खरीदें", "🏆 लीडरबोर्ड", "📞 सहायता"]
     },
     "en": {
-        "welcome": "Hello {name}! Welcome to <b>Skillclub</b>. 🙏\n\n🚀 <b>Steps to Start:</b>\n1️⃣ Click '📚 Buy Course'.\n2️⃣ Pay via UPI.\n3️⃣ Send Screenshot here.",
+        "welcome": "Hello {name}! Welcome to <b>Skillclub</b>. 🙏🎉\n\nHere you can learn <b>Digital Skills</b> and earn great income through our <b>Refer & Earn</b> program! 💸\n\n🚀 <b>How to Start?</b>\n1️⃣ Click on <b>'📚 Buy Course'</b> and select a course.\n2️⃣ Make the payment and send the <b>Screenshot</b> here in the bot.\n3️⃣ Once approved, you get the course access and your <b>'🔗 Invite Link'</b> will be unlocked! 🔓\n\n💰 <b>How to Earn?</b>\nShare your 'Invite Link' with friends. Whenever someone buys a course using your link, you get <b>direct Commission</b>!\nYou can withdraw your earnings from the <b>'💰 Wallet'</b> directly to your UPI. 🥳\n\n📢 <b>Join our group for new updates:</b>\n👉 https://t.me/skillclubpartners\n\n👇 <b>Use the buttons below to get started:</b>",
         "lang_select": "🌐 <b>Choose your language:</b>",
         "lang_updated": "✅ Language updated to <b>English</b>.",
         "profile": "👤 <b>Name:</b> {name}\n🏆 <b>Status:</b> {status}\n💰 <b>Balance:</b> ₹{bal}\n👥 <b>Referrals:</b> {refs}\n📅 <b>Joined:</b> {date}",
         "buy_menu": "🎓 <b>Available Courses:</b>",
         "payment_instruction": "🚀 <b>Course:</b> {cname}\n💰 <b>Price:</b> ₹{price}\n\nℹ️ <b>Instructions:</b>\n1. Pay to UPI: <code>{upi}</code>\n2. Take a Screenshot.\n3. <b>Send the screenshot here.</b>",
         "wallet_msg": "💰 <b>Wallet Balance:</b> ₹{bal}\n⚠️ <b>Min Withdrawal:</b> ₹500",
-        "invite": "🔥 <b>Your Link:</b>\n{link}",
-        "invite_locked": "❌ <b>Locked!</b> Buy course first.",
+        "invite": "🔥 <b>Your Link:</b>\n{link}\n\nPromote this and earn daily!",
+        "invite_locked": "❌ <b>Locked!</b>\nTo earn money by referring, please buy at least one course first.",
         "wd_success": "🥳 <b>Payout Successful!</b>",
         "support_msg": "📞 <b>Support Center:</b>",
         "leaderboard": "🏆 <b>Top 10 Leaderboard:</b>\n\n{list}",
@@ -64,31 +64,64 @@ STRINGS = {
     }
 }
 
-# --- 3. DATA MANAGER ---
+# --- 3. MONGODB DATA MANAGER ---
+if MONGO_URI:
+    client = pymongo.MongoClient(MONGO_URI)
+    db = client['skillclub_bot']
+    users_col = db['users']
+    courses_col = db['courses']
+    sales_col = db['sales']
+    wd_col = db['withdrawals']
+    settings_col = db['settings']
+
+    if os.path.exists(DB_FILE) and users_col.count_documents({}) == 0:
+        print("⏳ Migrating Local JSON Data to MongoDB Cloud...")
+        try:
+            with open(DB_FILE, 'r') as f:
+                d = json.load(f)
+                if d: users_col.bulk_write([pymongo.UpdateOne({'_id': str(k)}, {'$set': v}, upsert=True) for k, v in d.items()])
+            if os.path.exists(COURSE_DB):
+                with open(COURSE_DB, 'r') as f:
+                    c = json.load(f)
+                    if c: courses_col.bulk_write([pymongo.UpdateOne({'_id': str(k)}, {'$set': v}, upsert=True) for k, v in c.items()])
+            print("✅ Data Migration Successful!")
+        except Exception as e: print(f"❌ Migration Error: {e}")
+
 def load_json(filename):
-    if not os.path.exists(filename):
-        if filename == SETTINGS_FILE: default = {"upi": DEFAULT_UPI, "buttons": []}
-        elif "log" in filename: default = []
-        else: default = {}
-        with open(filename, 'w') as f: json.dump(default, f)
-        return default
-    try:
-        with open(filename, 'r') as f: return json.load(f)
-    except: return {}
+    if not MONGO_URI: return {}
+    if filename == DB_FILE: return {str(doc['_id']): doc for doc in users_col.find()}
+    elif filename == COURSE_DB: return {str(doc['_id']): doc for doc in courses_col.find()}
+    elif filename == SALES_FILE: return list(sales_col.find({}, {'_id': 0}))
+    elif filename == WD_FILE: return list(wd_col.find({}, {'_id': 0}))
+    elif filename == SETTINGS_FILE:
+        doc = settings_col.find_one({"_id": "config"})
+        if doc: return doc
+        return {"upi": DEFAULT_UPI, "buttons": []}
+    return {}
 
 def save_json(filename, data):
-    with open(filename, 'w') as f: json.dump(data, f, indent=4)
+    if not MONGO_URI or not data: return
+    if filename == DB_FILE:
+        reqs = [pymongo.UpdateOne({'_id': str(k)}, {'$set': v}, upsert=True) for k, v in data.items()]
+        if reqs: users_col.bulk_write(reqs)
+    elif filename == COURSE_DB:
+        current_ids = [str(k) for k in data.keys()]
+        if current_ids: courses_col.delete_many({'_id': {'$nin': current_ids}})
+        reqs = [pymongo.UpdateOne({'_id': str(k)}, {'$set': v}, upsert=True) for k, v in data.items()]
+        if reqs: courses_col.bulk_write(reqs)
+    elif filename == SETTINGS_FILE:
+        settings_col.update_one({"_id": "config"}, {"$set": data}, upsert=True)
 
-def log_transaction(filename, amount):
-    logs = load_json(filename)
-    if not isinstance(logs, list): logs = []
-    logs.append({"amount": amount, "date": time.strftime("%Y-%m-%d"), "month": time.strftime("%Y-%m")})
-    save_json(filename, logs)
+def log_transaction(filename, record):
+    if not MONGO_URI: return
+    if filename == SALES_FILE: sales_col.insert_one(record)
+    elif filename == WD_FILE: wd_col.insert_one(record)
 
 def get_upi():
-    return load_json(SETTINGS_FILE).get("upi", DEFAULT_UPI)
+    if not MONGO_URI: return DEFAULT_UPI
+    doc = settings_col.find_one({"_id": "config"})
+    return doc.get("upi", DEFAULT_UPI) if doc else DEFAULT_UPI
 
-# --- 4. ADMIN STATS ---
 def get_stats():
     data = load_json(DB_FILE)
     sales = load_json(SALES_FILE)
@@ -96,19 +129,19 @@ def get_stats():
     today, month = time.strftime("%Y-%m-%d"), time.strftime("%Y-%m")
     
     t_sell, m_sell, l_sell = 0, 0, 0
-    for s in (sales if isinstance(sales, list) else []):
+    for s in sales:
         amt = s.get('amount', 0)
         l_sell += amt
         if s.get('date') == today: t_sell += amt
         if s.get('month') == month: m_sell += amt
         
     t_wd, l_wd = 0, 0
-    for w in (wd if isinstance(wd, list) else []):
+    for w in wd:
         amt = w.get('amount', 0)
         l_wd += amt
         if w.get('date') == today: t_wd += amt
 
-    return (f"📊 <b>Skillclub Master Stats</b>\n\n"
+    return (f"📊 <b>Skillclub Master Stats (Cloud)</b>\n\n"
             f"💰 <b>Today Sales:</b> ₹{t_sell}\n"
             f"📅 <b>Monthly Sales:</b> ₹{m_sell}\n"
             f"📈 <b>Total Sales:</b> ₹{l_sell}\n\n"
@@ -116,7 +149,6 @@ def get_stats():
             f"🏧 <b>Total Payout:</b> ₹{l_wd}\n\n"
             f"👥 <b>Total Users:</b> {len(data)}\n"
             f"✅ <b>Paid Users:</b> {sum(1 for u in data.values() if u.get('status') == 'Paid')}")
-
     # --- 5. MAIN MENU ---
 def get_main_menu(uid, lang):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -134,16 +166,14 @@ def start_cmd(message):
         args = message.text.split()
         ref = args[1] if len(args) > 1 else None
         
-        # User Data Create
         data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
         
-        # SEND NOTIFICATION TO REFERRER (When user joins)
+        # 🔥 NOTIFICATION TO REFERRER
         if ref and ref in data and str(ref) != uid:
             try:
                 notif_msg = f"🎉 <b>नया रेफरल (New Referral)!</b>\n\n👤 <b>{message.from_user.first_name}</b> आपके लिंक से जुड़ गए हैं। जब वे कोई कोर्स खरीदेंगे, तो आपको कमीशन मिलेगा!"
                 bot.send_message(ref, notif_msg, parse_mode="HTML")
-            except:
-                pass 
+            except: pass 
 
     if data[uid].get("join_date") in ["Old", None]:
         data[uid]["join_date"] = time.strftime("%Y-%m-%d")
@@ -157,7 +187,6 @@ def start_cmd(message):
         bot.send_message(uid, STRINGS[lang]["welcome"].format(name=data[uid]["name"]), reply_markup=get_main_menu(uid, lang), parse_mode="HTML")
 
 # --- 6. ADMIN FUNCTIONS ---
-
 def process_broadcast(message):
     data = load_json(DB_FILE)
     count = 0
@@ -165,8 +194,7 @@ def process_broadcast(message):
     for uid in data:
         try:
             if message.content_type == 'text':
-                text = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.text}"
-                bot.send_message(uid, text, parse_mode="HTML")
+                bot.send_message(uid, f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.text}", parse_mode="HTML")
             elif message.content_type == 'photo':
                 caption = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.caption if message.caption else ''}"
                 bot.send_photo(uid, message.photo[-1].file_id, caption=caption, parse_mode="HTML")
@@ -236,23 +264,18 @@ def search_by_id(message):
     uid = message.text.strip()
     data = load_json(DB_FILE)
     user = data.get(uid)
-    if user:
-        bot.send_message(ADMIN_ID, f"🔍 <b>Found:</b>\nName: {user['name']}\nBal: {user['balance']}", parse_mode="HTML")
-    else:
-        bot.send_message(ADMIN_ID, "❌ User ID not found.")
+    if user: bot.send_message(ADMIN_ID, f"🔍 <b>Found:</b>\nName: {user['name']}\nBal: {user['balance']}", parse_mode="HTML")
+    else: bot.send_message(ADMIN_ID, "❌ User ID not found.")
 
 def search_by_name(message):
     name_query = message.text.lower().strip()
     data = load_json(DB_FILE)
     found = []
     for uid, info in data.items():
-        if name_query in info['name'].lower():
-            found.append(f"🆔 {uid} | {info['name']}")
-    if found:
-        res = "\n".join(found[:10]) 
-        bot.send_message(ADMIN_ID, f"🔍 <b>Results:</b>\n\n{res}", parse_mode="HTML")
-    else:
-        bot.send_message(ADMIN_ID, "❌ No user found.")
+        if name_query in info['name'].lower(): found.append(f"🆔 {uid} | {info['name']}")
+    if found: bot.send_message(ADMIN_ID, f"🔍 <b>Results:</b>\n\n" + "\n".join(found[:10]), parse_mode="HTML")
+    else: bot.send_message(ADMIN_ID, "❌ No user found.")
+
 # --- EDIT BALANCE FUNCTIONS ---
 def ask_bal_amount(message):
     target_uid = message.text.strip()
@@ -272,14 +295,11 @@ def save_new_bal(message, target_uid):
             data[target_uid]['balance'] = new_bal
             save_json(DB_FILE, data)
             bot.send_message(ADMIN_ID, f"✅ <b>Success!</b> {data[target_uid]['name']}'s new balance is <b>₹{new_bal}</b>", parse_mode="HTML")
-            
-            # यूज़र को नोटिफिकेशन भेजें (Optional)
-            try:
-                bot.send_message(target_uid, f"💰 <b>Wallet Update:</b> आपके वॉलेट का नया बैलेंस <b>₹{new_bal}</b> कर दिया गया है।", parse_mode="HTML")
+            try: bot.send_message(target_uid, f"💰 <b>Wallet Update:</b> आपके वॉलेट का नया बैलेंस <b>₹{new_bal}</b> कर दिया गया है।", parse_mode="HTML")
             except: pass
     except:
         bot.send_message(ADMIN_ID, "❌ Error! Please enter a valid number.")
-# --- 7. HANDLERS ---
+        # --- 7. HANDLERS ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
     uid, data = str(call.message.chat.id), load_json(DB_FILE)
@@ -353,7 +373,7 @@ def callbacks(call):
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
             
-    # 🔥 COURSE PAYMENT APPROVAL (WITH ALERTS & BUTTON REMOVAL)
+    # 🔥 COURSE PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
         t_id, cid = parts[1], parts[2]
@@ -364,19 +384,18 @@ def callbacks(call):
             if t_id in u_data:
                 u_data[t_id].setdefault("purchased", []).append(cid)
                 u_data[t_id]["status"] = "Paid"
-                log_transaction(SALES_FILE, c['price'])
+                log_transaction(SALES_FILE, {"amount": c['price'], "date": time.strftime("%Y-%m-%d"), "month": time.strftime("%Y-%m")})
                 
                 buyer_name = u_data[t_id].get("name", "Unknown")
                 course_name = c['name']
                 
-                # COMMISSION LOGIC
                 l1 = u_data[t_id].get("referred_by")
                 if l1 and l1 in u_data:
                     l1_comm = c.get("l1", 0)
                     u_data[l1]["balance"] += l1_comm
                     u_data[l1]["referrals"] = u_data[l1].get("referrals", 0) + 1
                     try:
-                        l1_msg = f"💸 <b>कमीशन प्राप्त हुआ! (Commission Added)</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l1_comm}</b> जोड़ दिए गए हैं।"
+                        l1_msg = f"💸 <b>कमीशन प्राप्त हुआ!</b>\n\n👤 <b>{buyer_name}</b> ने <b>{course_name}</b> ख़रीदा है।\n💰 आपके वॉलेट में <b>₹{l1_comm}</b> जोड़ दिए गए हैं।"
                         bot.send_message(l1, l1_msg, parse_mode="HTML")
                     except: pass
                     
@@ -391,30 +410,15 @@ def callbacks(call):
                 
                 save_json(DB_FILE, u_data)
                 bot.send_message(t_id, "🥳 <b>Payment Approved!</b> Course unlocked.", parse_mode="HTML")
-                
-                # UPDATE ADMIN MESSAGE AND REMOVE BUTTONS
                 try: 
-                    bot.edit_message_caption(
-                        caption=f"✅ <b>APPROVED</b>\nUser: <code>{t_id}</code>\nCourse: {course_name}", 
-                        chat_id=ADMIN_ID, 
-                        message_id=call.message.message_id, 
-                        reply_markup=None, 
-                        parse_mode="HTML"
-                    )
+                    bot.edit_message_caption(caption=f"✅ <b>APPROVED</b>\nUser: <code>{t_id}</code>\nCourse: {course_name}", chat_id=ADMIN_ID, message_id=call.message.message_id, reply_markup=None, parse_mode="HTML")
                 except: pass
 
     # 🔥 COURSE PAYMENT REJECT
     elif call.data.startswith("rej_"):
         t_id = call.data.split('_')[1]
         bot.send_message(t_id, "❌ <b>Payment Rejected!</b>\nआपका पेमेंट स्क्रीनशॉट अमान्य है। कृपया सपोर्ट टीम से बात करें।", parse_mode="HTML")
-        try:
-            bot.edit_message_caption(
-                caption=f"❌ <b>REJECTED</b>\nUser: <code>{t_id}</code>", 
-                chat_id=ADMIN_ID, 
-                message_id=call.message.message_id, 
-                reply_markup=None, 
-                parse_mode="HTML"
-            )
+        try: bot.edit_message_caption(caption=f"❌ <b>REJECTED</b>\nUser: <code>{t_id}</code>", chat_id=ADMIN_ID, message_id=call.message.message_id, reply_markup=None, parse_mode="HTML")
         except: pass
 
     elif call.data == "ask_wd":
@@ -425,15 +429,14 @@ def callbacks(call):
         else:
             bot.send_message(uid, "❌ Minimum withdrawal is ₹500.")
 
-    # 🔥 WITHDRAWAL APPROVAL (FIXED NEGATIVE BALANCE, LOGS & BUTTON REMOVAL)
+    # 🔥 WITHDRAWAL APPROVAL
     elif call.data.startswith("wdpay_"):
         parts = call.data.split('_')
         t_id, amt = parts[1], int(parts[2])
         u_data = load_json(DB_FILE)
         
         if t_id in u_data:
-            if u_data[t_id].get("balance", 0) >= amt:
-                u_data[t_id]["balance"] -= amt
+            if u_data[t_id].get("balance", 0) >= amt: u_data[t_id]["balance"] -= amt
             else:
                 amt = u_data[t_id].get("balance", 0)
                 u_data[t_id]["balance"] = 0
@@ -445,41 +448,16 @@ def callbacks(call):
             upi_id = upi_match.group(1).strip() if upi_match else "Unknown"
             user_name = u_data[t_id].get('name', 'Unknown')
             
-            wd_logs = load_json(WD_FILE)
-            if not isinstance(wd_logs, list): wd_logs = []
-            wd_logs.append({
-                "uid": t_id,
-                "name": user_name,
-                "amount": amt,
-                "upi": upi_id,
-                "date": time.strftime("%Y-%m-%d"),
-                "time": time.strftime("%H:%M:%S")
-            })
-            save_json(WD_FILE, wd_logs)
-            
+            log_transaction(WD_FILE, {"uid": t_id, "name": user_name, "amount": amt, "upi": upi_id, "date": time.strftime("%Y-%m-%d"), "time": time.strftime("%H:%M:%S")})
             bot.send_message(t_id, f"✅ Withdrawal of <b>₹{amt}</b> Successful!\nYour amount will be credited soon.", parse_mode="HTML")
-            try:
-                bot.edit_message_text(
-                    text=f"✅ <b>PAID ₹{amt}</b> to {user_name}\n💳 UPI: <code>{upi_id}</code>", 
-                    chat_id=ADMIN_ID, 
-                    message_id=call.message.message_id, 
-                    reply_markup=None, 
-                    parse_mode="HTML"
-                )
+            try: bot.edit_message_text(text=f"✅ <b>PAID ₹{amt}</b> to {user_name}\n💳 UPI: <code>{upi_id}</code>", chat_id=ADMIN_ID, message_id=call.message.message_id, reply_markup=None, parse_mode="HTML")
             except: pass
 
     # 🔥 WITHDRAWAL REJECT
     elif call.data.startswith("wdrej_"):
         t_id = call.data.split('_')[1]
         bot.send_message(t_id, "❌ Your Withdrawal Request was Rejected.")
-        try:
-            bot.edit_message_text(
-                text=f"❌ <b>REJECTED</b>\nWithdrawal for User: <code>{t_id}</code>", 
-                chat_id=ADMIN_ID, 
-                message_id=call.message.message_id, 
-                reply_markup=None, 
-                parse_mode="HTML"
-            )
+        try: bot.edit_message_text(text=f"❌ <b>REJECTED</b>\nWithdrawal for User: <code>{t_id}</code>", chat_id=ADMIN_ID, message_id=call.message.message_id, reply_markup=None, parse_mode="HTML")
         except: pass
 
 def process_withdrawal(message, amt):
@@ -489,18 +467,9 @@ def process_withdrawal(message, amt):
     user = data.get(uid, {})
     
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{uid}_{amt}"),
-               types.InlineKeyboardButton("❌ Reject", callback_data=f"wdrej_{uid}"))
+    markup.add(types.InlineKeyboardButton("✅ Pay", callback_data=f"wdpay_{uid}_{amt}"), types.InlineKeyboardButton("❌ Reject", callback_data=f"wdrej_{uid}"))
     
-    admin_text = (
-        f"🔔 <b>New Withdrawal Request!</b>\n\n"
-        f"👤 <b>Name:</b> {user.get('name', 'Unknown')}\n"
-        f"🆔 <b>ID:</b> <code>{uid}</code>\n"
-        f"👥 <b>Total Referrals:</b> {user.get('referrals', 0)}\n"
-        f"💰 <b>Requested Amount:</b> ₹{amt}\n\n"
-        f"💳 <b>UPI:</b> <code>{upi_id}</code>"
-    )
-    
+    admin_text = f"🔔 <b>New Withdrawal Request!</b>\n\n👤 <b>Name:</b> {user.get('name', 'Unknown')}\n🆔 <b>ID:</b> <code>{uid}</code>\n👥 <b>Total Referrals:</b> {user.get('referrals', 0)}\n💰 <b>Requested Amount:</b> ₹{amt}\n\n💳 <b>UPI:</b> <code>{upi_id}</code>"
     bot.send_message(ADMIN_ID, admin_text, reply_markup=markup, parse_mode="HTML")
     bot.send_message(uid, "✅ Request Sent! Please wait for approval.")
 
@@ -516,53 +485,49 @@ def handle_menu(message):
         m.add("📊 Stats", "📢 Broadcast")
         m.add("📥 Export Data", "🎓 Manage Courses")
         m.add("📞 Support Settings", "👤 Search User")
-        m.add("💳 Change UPI", "💰 Edit Balance") # <-- नया बटन यहाँ है
+        m.add("💳 Change UPI", "💰 Edit Balance")
         m.add("🔙 Back to Main Menu")
         bot.send_message(uid, "🛠 Admin Panel:", reply_markup=m)
     
     elif text == "📊 Stats" and uid == ADMIN_ID: bot.send_message(uid, get_stats(), parse_mode="HTML")
-    
     elif text == "📢 Broadcast" and uid == ADMIN_ID:
         msg = bot.send_message(uid, "📢 Send Message to Broadcast:")
         bot.register_next_step_handler(msg, process_broadcast)
-    
     elif text == "🎓 Manage Courses" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("➕ Add New", callback_data="c_add"),
-              types.InlineKeyboardButton("🗑️ Delete Course", callback_data="c_del"))
+        m.add(types.InlineKeyboardButton("➕ Add New", callback_data="c_add"), types.InlineKeyboardButton("🗑️ Delete Course", callback_data="c_del"))
         bot.send_message(uid, "🎓 Course Management:", reply_markup=m)
-        
     elif text == "📞 Support Settings" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), 
-              types.InlineKeyboardButton("🗑️ Delete Button", callback_data="adm_del_menu"))
+        m.add(types.InlineKeyboardButton("➕ Add Button", callback_data="adm_add"), types.InlineKeyboardButton("🗑️ Delete Button", callback_data="adm_del_menu"))
         bot.send_message(uid, "⚙️ Settings:", reply_markup=m)
-    
     elif text == "💳 Change UPI" and uid == ADMIN_ID:
         current = get_upi()
         msg = bot.send_message(uid, f"💳 <b>Current UPI:</b> <code>{current}</code>\n\n👇 <b>Enter New UPI ID:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, change_upi_process)
-
+    
     elif text == "💰 Edit Balance" and uid == ADMIN_ID:
         msg = bot.send_message(uid, "📝 <b>Enter User ID:</b>", parse_mode="HTML")
         bot.register_next_step_handler(msg, ask_bal_amount)
 
+    # 🔥 CLOUD EXPORT DATA
     elif text == "📥 Export Data" and uid == ADMIN_ID:
-        if os.path.exists(DB_FILE): bot.send_document(uid, open(DB_FILE, 'rb'))
-        if os.path.exists(SALES_FILE): bot.send_document(uid, open(SALES_FILE, 'rb'))
-        if os.path.exists(WD_FILE): bot.send_document(uid, open(WD_FILE, 'rb'))
+        bot.send_message(uid, "⏳ <b>Exporting Data from Cloud Database...</b>", parse_mode="HTML")
+        try:
+            for fname in [DB_FILE, COURSE_DB, SALES_FILE, WD_FILE]:
+                with open(fname, 'w') as f: json.dump(load_json(fname), f, indent=4)
+                if os.path.exists(fname): bot.send_document(uid, open(fname, 'rb'))
+        except Exception as e: bot.send_message(uid, f"❌ Export Error: {e}")
     
     elif text == "👤 Search User" and uid == ADMIN_ID:
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("🆔 By ID", callback_data="s_id"),
-              types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
+        m.add(types.InlineKeyboardButton("🆔 By ID", callback_data="s_id"), types.InlineKeyboardButton("🔤 By Name", callback_data="s_name"))
         bot.send_message(uid, "🔍 Search User By:", reply_markup=m)
 
     # USER MENU
     elif text in ["👤 प्रोफाइल", "👤 Profile"]:
         p = data[uid]
-        j_date = p.get('join_date', time.strftime("%Y-%m-%d"))
-        bot.send_message(uid, STRINGS[lang]["profile"].format(name=p['name'], status=p['status'], refs=p.get('referrals', 0), bal=p['balance'], date=j_date), parse_mode="HTML")
+        bot.send_message(uid, STRINGS[lang]["profile"].format(name=p['name'], status=p['status'], refs=p.get('referrals', 0), bal=p['balance'], date=p.get('join_date', time.strftime("%Y-%m-%d"))), parse_mode="HTML")
 
     elif text in ["💰 वॉलेट", "💰 Wallet"]:
         bal = data[uid].get('balance', 0)
@@ -587,18 +552,13 @@ def handle_menu(message):
 
     elif text in ["📞 सहायता", "📞 Support"]:
         try:
-            settings = load_json(SETTINGS_FILE)
-            btns = settings.get("buttons", [])
-            if not btns:
-                bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
+            btns = load_json(SETTINGS_FILE).get("buttons", [])
+            if not btns: bot.send_message(uid, "⚠️ <b>Contact Admin directly.</b>", parse_mode="HTML")
             else:
                 m = types.InlineKeyboardMarkup()
-                for b in btns: 
-                    b_url = b.get('url', 'https://telegram.org')
-                    m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b_url))
+                for b in btns: m.add(types.InlineKeyboardButton(f"👉 {b['name']}", url=b.get('url', 'https://telegram.org')))
                 bot.send_message(uid, STRINGS[lang]["support_msg"], reply_markup=m, parse_mode="HTML")
-        except:
-            bot.send_message(uid, "⚠️ Error loading support buttons.")
+        except: bot.send_message(uid, "⚠️ Error loading support buttons.")
 
     elif text in ["⚙️ सेटिंग्स", "⚙️ Settings"]:
         m = types.InlineKeyboardMarkup()
@@ -614,6 +574,7 @@ def handle_menu(message):
     elif text in ["🔙 Back to Main Menu", "🔙 वापस"]:
         bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
 
+# 🔥 UTR SYSTEM 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     uid = str(message.chat.id)
@@ -621,17 +582,13 @@ def handle_photo(message):
     pending_cid = data.get(uid, {}).get("pending_buy")
     
     if pending_cid:
-        # स्क्रीनशॉट सेव करें और UTR मांगें
         data[uid]["pending_photo"] = message.photo[-1].file_id
         save_json(DB_FILE, data)
-        
         msg = bot.send_message(uid, "✅ <b>स्क्रीनशॉट मिल गया!</b>\n\nकृपया अपने पेमेंट का <b>12-अंकों का UTR (Reference) नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_utr)
 
 def process_utr(message):
     uid = str(message.chat.id)
-    
-    # अगर यूज़र ने टेक्स्ट की जगह कुछ और भेजा है
     if message.content_type != 'text':
         msg = bot.send_message(uid, "❌ <b>गलत इनपुट!</b>\nकृपया केवल <b>UTR नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_utr)
@@ -639,34 +596,23 @@ def process_utr(message):
 
     utr_number = message.text.strip()
     data = load_json(DB_FILE)
-    
     pending_cid = data.get(uid, {}).get("pending_buy")
     photo_id = data.get(uid, {}).get("pending_photo")
     
     if pending_cid and photo_id:
         courses = load_json(COURSE_DB)
         c_name = courses[pending_cid]['name'] if pending_cid in courses else "Unknown"
-        
-        # एडमिन को UTR के साथ फोटो भेजना
         m = types.InlineKeyboardMarkup()
-        m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"),
-              types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
-        
-        admin_caption = (
-            f"📩 <b>New Payment Received!</b>\n\n"
-            f"👤 <b>User:</b> <code>{uid}</code>\n"
-            f"🎓 <b>Course:</b> {c_name}\n"
-            f"🔢 <b>UTR No:</b> <code>{utr_number}</code>"
-        )
+        m.add(types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{pending_cid}"), types.InlineKeyboardButton("❌ Reject", callback_data=f"rej_{uid}"))
+        admin_caption = f"📩 <b>New Payment Received!</b>\n\n👤 <b>User:</b> <code>{uid}</code>\n🎓 <b>Course:</b> {c_name}\n🔢 <b>UTR No:</b> <code>{utr_number}</code>"
         
         bot.send_photo(ADMIN_ID, photo_id, caption=admin_caption, reply_markup=m, parse_mode="HTML")
         bot.send_message(uid, "✅ <b>डिटेल्स भेज दी गई हैं!</b>\nकृपया एडमिन के अप्रूवल का इंतज़ार करें।", parse_mode="HTML")
         
-        # पेंडिंग फोटो डेटा से हटा दें (सफाई)
         if "pending_photo" in data[uid]:
             del data[uid]["pending_photo"]
             save_json(DB_FILE, data)
-            
+
 # --- 8. WEBHOOK & BRIDGE ROUTES ---
 @app.route('/' + API_TOKEN, methods=['POST'])
 def getMessage():
@@ -675,7 +621,6 @@ def getMessage():
     bot.process_new_updates([update])
     return "!", 200
 
-# BRIDGE FOR SUPPORT BOT
 @app.route('/api/user/<uid>', methods=['GET'])
 def api_user_data(uid):
     data = load_json(DB_FILE)
@@ -693,9 +638,7 @@ def run_server():
     app.run(host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    if WEBHOOK_URL:
-        run_server()
+    if WEBHOOK_URL: run_server()
     else:
         bot.remove_webhook()
         bot.polling(none_stop=True)
-                
