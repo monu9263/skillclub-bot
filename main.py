@@ -68,7 +68,7 @@ STRINGS = {
 # --- 3. MONGODB DATA MANAGER ---
 if MONGO_URI:
     # 🔥 यहाँ tlsCAFile=certifi.where() जोड़ा गया है ताकि SSL एरर ना आये
-    client = pymongo.MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+    client = pymongo.MongoClient(MONGO_URI,tls=true,tlsAllowInvalidCertificates=True)
     db = client['skillclub_bot']
     users_col = db['users']
     courses_col = db['courses']
