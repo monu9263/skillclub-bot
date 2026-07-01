@@ -247,18 +247,54 @@ def handle_language_selection(call):
 def process_broadcast(message):
     data = load_json(DB_FILE)
     count = 0
-    bot.send_message(ADMIN_ID, "⏳ Broadcasting...")
-    for uid in data:
+    bot.send_message(ADMIN_ID, "⏳ Auto-Translating and Broadcasting... (Please wait)")
+    
+    # 1. पहले ही हर भाषा में मैसेज ट्रांसलेट करके सेव कर लें (ताकि बोट हैंग न हो)
+    translated_messages = {}
+    translated_captions = {}
+    announcements = {}
+    
+    # चेक करें कि डेटाबेस में कौन-कौन सी भाषाएं मौजूद हैं
+    langs_needed = set(user.get("lang", "hi") for user in data.values())
+    
+    for lang in langs_needed:
         try:
+            # हेडिंग ट्रांसलेट करें
+            announcements[lang] = GoogleTranslator(source='auto', target=lang).translate("📢 ANNOUNCEMENT 📢")
+            
+            # अगर सिर्फ टेक्स्ट है
             if message.content_type == 'text':
-                bot.send_message(uid, f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.text}", parse_mode="HTML")
+                translated_messages[lang] = GoogleTranslator(source='auto', target=lang).translate(message.text)
+            
+            # अगर फोटो + कैप्शन है
+            elif message.content_type == 'photo' and message.caption:
+                translated_captions[lang] = GoogleTranslator(source='auto', target=lang).translate(message.caption)
+        except:
+            # अगर कोई सर्वर एरर आए तो ओरिजिनल मैसेज सेव कर लें
+            announcements[lang] = "📢 <b>ANNOUNCEMENT</b> 📢"
+            if message.content_type == 'text': translated_messages[lang] = message.text
+            elif message.content_type == 'photo' and message.caption: translated_captions[lang] = message.caption
+
+    # 2. अब सबको उनकी अपनी चुनी हुई भाषा में मैसेज भेजें
+    for uid, user_info in data.items():
+        try:
+            target_lang = user_info.get("lang", "hi")
+            ann_text = announcements.get(target_lang, "📢 <b>ANNOUNCEMENT</b> 📢")
+            
+            if message.content_type == 'text':
+                msg_text = translated_messages.get(target_lang, message.text)
+                bot.send_message(uid, f"<b>{ann_text}</b>\n\n{msg_text}", parse_mode="HTML")
+                
             elif message.content_type == 'photo':
-                caption = f"📢 <b>ANNOUNCEMENT</b> 📢\n\n{message.caption if message.caption else ''}"
-                bot.send_photo(uid, message.photo[-1].file_id, caption=caption, parse_mode="HTML")
+                cap_text = translated_captions.get(target_lang, message.caption if message.caption else "")
+                final_caption = f"<b>{ann_text}</b>\n\n{cap_text}" if cap_text else f"<b>{ann_text}</b>"
+                bot.send_photo(uid, message.photo[-1].file_id, caption=final_caption, parse_mode="HTML")
+                
             count += 1
-            time.sleep(0.05)
+            time.sleep(0.05) # बोट को ब्लॉक होने से बचाने के लिए
         except: continue
-    bot.send_message(ADMIN_ID, f"✅ Sent to {count} users.")
+        
+    bot.send_message(ADMIN_ID, f"✅ Auto-Translated Broadcast successfully sent to {count} users!")
 
 def add_course_start(message):
     msg = bot.send_message(ADMIN_ID, "📝 Course Name:")
