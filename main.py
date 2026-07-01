@@ -1,12 +1,13 @@
 import telebot
 from telebot import types
+from deep_translator import GoogleTranslator
 import json
 import os
 import re
 import time
 import random
 import pymongo
-import certifi  # <--- 🔥 यह नया जोड़ा गया है
+import certifi # <--- 🔥 यह नया जोड़ा गया है
 from flask import Flask, request
 
 # --- 1. CONFIGURATION ---
@@ -161,14 +162,51 @@ def get_main_menu(uid, lang):
     if str(uid) == ADMIN_ID: markup.add("🛠 Admin Panel")
     return markup
 
-@bot.message_handler(commands=['start'])
-def start_cmd(message):
-    data, uid = load_json(DB_FILE), str(message.chat.id)
-    if uid not in data:
-        args = message.text.split()
-        ref = args[1] if len(args) > 1 else None
+MASTER_WELCOME_MSG = """नमस्ते {name}! <b>Skillclub</b> में आपका स्वागत है। 🙏🎉
+
+यहाँ आप <b>Digital Skills</b> सीख सकते हैं और साथ ही Refer & Earn करके शानदार इनकम कर सकते हैं!
+
+कृपया नीचे दिए गए ऑप्शंस में से चुनें:"""
+
+@bot.message_handler(commands=['start', 'language'])
+def send_welcome_and_lang(message):
+    user_id = message.chat.id
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        types.InlineKeyboardButton("English 🇬🇧", callback_data="setlang_en"),
+        types.InlineKeyboardButton("हिंदी 🇮🇳", callback_data="setlang_hi"),
+        types.InlineKeyboardButton("বাংলা 🇧🇩", callback_data="setlang_bn"),
+        types.InlineKeyboardButton("मराठी 🚩", callback_data="setlang_mr")
+    )
+    bot.send_message(user_id, "🌐 Please choose your language:\nकृपया अपनी भाषा चुनें:", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('setlang_'))
+def handle_language_selection(call):
+    user_id = call.message.chat.id
+    first_name = call.message.chat.first_name
+    target_lang = call.data.split('_')[1] 
+    
+    loading_msg = bot.send_message(user_id, "⏳ <i>Translating...</i>", parse_mode="HTML")
+    final_hindi_text = MASTER_WELCOME_MSG.format(name=first_name)
+    
+    try:
+        if target_lang == 'hi':
+            translated_text = final_hindi_text
+            confirm_msg = "✅ आपकी भाषा हिंदी में सेट कर दी गई है!"
+        else:
+            translated_text = GoogleTranslator(source='hi', target=target_lang).translate(final_hindi_text)
+            confirm_msg = f"✅ Language updated!"
+            
+        # MongoDB में भाषा सुरक्षित रूप से सेव करें (कोई पुराना डेटा डिलीट नहीं होगा)
+        users_col.update_one({"_id": str(user_id)}, {"$set": {"lang": target_lang}}, upsert=True)
         
-        data[uid] = {"name": message.from_user.first_name, "balance": 0, "referred_by": ref, "status": "Free", "referrals": 0, "lang": "hi", "purchased": [], "join_date": time.strftime("%Y-%m-%d")}
+        bot.delete_message(chat_id=user_id, message_id=call.message.message_id)
+        bot.delete_message(chat_id=user_id, message_id=loading_msg.message_id)
+        bot.send_message(user_id, confirm_msg)
+        bot.send_message(user_id, translated_text, parse_mode="HTML")
+    except Exception as e:
+        bot.edit_message_text("❌ Server Error. Defaulting to Hindi.", chat_id=user_id, message_id=loading_msg.message_id)
+        bot.send_message(user_id, final_hindi_text, parse_mode="HTML")
         
         # 🔥 NOTIFICATION TO REFERRER
         if ref and ref in data and str(ref) != uid:
@@ -301,6 +339,93 @@ def save_new_bal(message, target_uid):
             except: pass
     except:
         bot.send_message(ADMIN_ID, "❌ Error! Please enter a valid number.")
+
+# === NEW PAYMENT & ADMIN SETTINGS ===
+@bot.callback_query_handler(func=lambda call: call.data.startswith('buyinfo_'))
+def select_payment_method(call):
+    cid = call.data.split('_')[1]
+    uid = str(call.message.chat.id)
+    
+    # UTR सिस्टम के लिए pending_buy सेव करना
+    data = load_json(DB_FILE)
+    data[uid]["pending_buy"] = cid
+    save_json(DB_FILE, data)
+    
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("🇮🇳 Pay via UPI / QR", callback_data=f"pay_upi_{cid}"),
+        types.InlineKeyboardButton("🌍 Pay via Crypto (USDT)", callback_data=f"pay_crypto_{cid}")
+    )
+    bot.edit_message_text("💳 <b>अपना पेमेंट तरीका (Payment Method) चुनें:</b>", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup, parse_mode="HTML")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('pay_crypto_'))
+def select_crypto_network(call):
+    cid = call.data.split('_')[2]
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("USDT (ERC20)", callback_data=f"network_erc20_{cid}"),
+        types.InlineKeyboardButton("USDT (TRC20)", callback_data=f"network_trc20_{cid}"),
+        types.InlineKeyboardButton("USDT (BEP20)", callback_data=f"network_bep20_{cid}"),
+        types.InlineKeyboardButton("⬅️ Back", callback_data=f"buyinfo_{cid}")
+    )
+    bot.edit_message_text("🪙 <b>कृपया अपना USDT नेटवर्क (Network) चुनें:</b>", chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup, parse_mode="HTML")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('network_'))
+def send_crypto_details(call):
+    parts = call.data.split('_') 
+    network, cid = parts[1], parts[2]
+    
+    settings = load_json(SETTINGS_FILE)
+    address = settings.get(f"usdt_{network}_addr", None)
+    qr_file_id = settings.get(f"usdt_{network}_qr", None)
+    
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    
+    if not address and not qr_file_id:
+        bot.send_message(call.message.chat.id, f"⚠️ Admin ने अभी तक {network.upper()} डिटेल्स सेट नहीं की हैं।", parse_mode="HTML")
+        return
+        
+    text = f"🪙 <b>USDT ({network.upper()}) Payment Details:</b>\n\n"
+    if address: text += f"<b>Address:</b> <code>{address}</code>\n<i>(Copy Address by clicking on it)</i>\n\n"
+    text += "⚠️ पेमेंट करने के बाद कृपया अपना TxID/Hash और <b>स्क्रीनशॉट</b> यहाँ अपलोड करें।"
+    
+    if qr_file_id: bot.send_photo(call.message.chat.id, photo=qr_file_id, caption=text, parse_mode="HTML")
+    else: bot.send_message(call.message.chat.id, text, parse_mode="HTML")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('pay_upi_'))
+def send_upi_details(call):
+    settings = load_json(SETTINGS_FILE)
+    upi_id = settings.get("upi", None)
+    upi_qr = settings.get("upi_qr", None)
+    
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    
+    if not upi_id and not upi_qr:
+        bot.send_message(call.message.chat.id, "⚠️ Admin ने अभी तक UPI डिटेल्स सेट नहीं की हैं।", parse_mode="HTML")
+        return
+
+    text = f"🇮🇳 <b>UPI Payment Details:</b>\n\n"
+    if upi_id: text += f"<b>UPI ID:</b> <code>{upi_id}</code>\n<i>(Copy UPI by clicking on it)</i>\n\n"
+    text += "⚠️ पेमेंट करने के बाद कृपया अपना 12-Digit UTR और <b>स्क्रीनशॉट</b> यहाँ अपलोड करें।"
+    
+    if upi_qr: bot.send_photo(call.message.chat.id, photo=upi_qr, caption=text, parse_mode="HTML")
+    else: bot.send_message(call.message.chat.id, text, parse_mode="HTML")
+
+@bot.message_handler(commands=['setupi', 'settrc20', 'seterc20', 'setbep20'])
+def admin_set_text_details(message):
+    if str(message.chat.id) != ADMIN_ID: return
+    command = message.text.split()[0].lower()
+    try:
+        value = message.text.split(" ", 1)[1]
+        field_map = {'/setupi': 'upi', '/settrc20': 'usdt_trc20_addr', '/seterc20': 'usdt_erc20_addr', '/setbep20': 'usdt_bep20_addr'}
+        field_name = field_map[command]
+        settings = load_json(SETTINGS_FILE)
+        settings[field_name] = value
+        save_json(SETTINGS_FILE, settings)
+        bot.reply_to(message, f"✅ {field_name} successfully updated to:\n{value}")
+    except IndexError:
+        bot.reply_to(message, f"❌ Please provide the value. Example:\n{command} your_address_here")
+        
         # --- 7. HANDLERS ---
 @bot.callback_query_handler(func=lambda call: True)
 def callbacks(call):
@@ -308,7 +433,7 @@ def callbacks(call):
     
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
-        save_json(DB_FILE, data)
+        s ave_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
     elif call.data == "adm_add": 
@@ -366,7 +491,7 @@ def callbacks(call):
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
-    elif call.data.startswith("buyinfo_"):
+elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
         c = load_json(COURSE_DB).get(cid)
         if c:
@@ -374,7 +499,7 @@ def callbacks(call):
             save_json(DB_FILE, data)
             current_upi = get_upi()
             bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
-            
+    
     # 🔥 COURSE PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
@@ -577,18 +702,33 @@ def handle_menu(message):
         bot.send_message(uid, "🔙 Main Menu", reply_markup=get_main_menu(uid, lang))
 
 # 🔥 UTR SYSTEM 
+# 🔥 UTR SYSTEM & ADMIN QR UPLOAD
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     uid = str(message.chat.id)
+    
+    # --- ADMIN QR UPLOAD LOGIC ---
+    if uid == ADMIN_ID and message.caption:
+        caption = message.caption.lower()
+        qr_map = {'upi qr': 'upi_qr', 'trc20 qr': 'usdt_trc20_qr', 'erc20 qr': 'usdt_erc20_qr', 'bep20 qr': 'usdt_bep20_qr'}
+        for key, field in qr_map.items():
+            if key in caption:
+                settings = load_json(SETTINGS_FILE)
+                settings[field] = message.photo[-1].file_id
+                save_json(SETTINGS_FILE, settings)
+                bot.reply_to(message, f"✅ {field} Photo successfully saved!")
+                return
+    # -----------------------------
+
     data = load_json(DB_FILE)
     pending_cid = data.get(uid, {}).get("pending_buy")
     
     if pending_cid:
         data[uid]["pending_photo"] = message.photo[-1].file_id
         save_json(DB_FILE, data)
-        msg = bot.send_message(uid, "✅ <b>स्क्रीनशॉट मिल गया!</b>\n\nकृपया अपने पेमेंट का <b>12-अंकों का UTR (Reference) नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
+        msg = bot.send_message(uid, "✅ <b>स्क्रीनशॉट मिल गया!</b>\n\nकृपया अपने पेमेंट का <b>12-अंकों का UTR/TxID (Reference) नंबर</b> टाइप करके भेजें:", parse_mode="HTML")
         bot.register_next_step_handler(msg, process_utr)
-
+        
 def process_utr(message):
     uid = str(message.chat.id)
     if message.content_type != 'text':
