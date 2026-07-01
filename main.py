@@ -66,6 +66,15 @@ STRINGS = {
     }
 }
 
+"btns": ["👤 Profile", "🔗 Invite Link", "💰 Wallet", "📚 Buy Course", "🏆 Leaderboard", "📞 Support"]
+    }
+} # <--- यहाँ आपकी पुरानी डिक्शनरी ख़त्म होती है
+
+# 🔥 इसके ठीक नीचे ये 2 लाइनें जोड़ दें:
+STRINGS["mr"] = STRINGS["en"]
+STRINGS["bn"] = STRINGS["en"]
+
+
 # --- 3. MONGODB DATA MANAGER ---
 if MONGO_URI:
     # 🔥 यहाँ tlsCAFile=certifi.where() जोड़ा गया है ताकि SSL एरर ना आये
