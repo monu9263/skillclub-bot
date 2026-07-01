@@ -487,19 +487,70 @@ def callbacks(call):
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
-    elif call.data == "s_name":
+  elif call.data == "s_name":
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
-elif call.data.startswith("buyinfo_"):
+    # 🔥 NEW PAYMENT SYSTEM (UPI + USDT + QR)
+    elif call.data.startswith("buyinfo_"):
         cid = call.data.split('_')[1]
-        c = load_json(COURSE_DB).get(cid)
-        if c:
-            data[uid]["pending_buy"] = cid
-            save_json(DB_FILE, data)
-            current_upi = get_upi()
-            bot.send_message(uid, STRINGS[data[uid].get("lang", "hi")]["payment_instruction"].format(cname=c['name'], price=c['price'], upi=current_upi), parse_mode="HTML")
-    
+        data[uid]["pending_buy"] = cid
+        save_json(DB_FILE, data)
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("🇮🇳 Pay via UPI / QR", callback_data=f"pay_upi_{cid}"),
+            types.InlineKeyboardButton("🌍 Pay via Crypto (USDT)", callback_data=f"pay_crypto_{cid}")
+        )
+        bot.edit_message_text("💳 <b>अपना पेमेंट तरीका (Payment Method) चुनें:</b>", chat_id=uid, message_id=call.message.message_id, reply_markup=markup, parse_mode="HTML")
+
+    elif call.data.startswith("pay_crypto_"):
+        cid = call.data.split('_')[2]
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton("USDT (ERC20)", callback_data=f"network_erc20_{cid}"),
+            types.InlineKeyboardButton("USDT (TRC20)", callback_data=f"network_trc20_{cid}"),
+            types.InlineKeyboardButton("USDT (BEP20)", callback_data=f"network_bep20_{cid}"),
+            types.InlineKeyboardButton("⬅️ Back", callback_data=f"buyinfo_{cid}")
+        )
+        bot.edit_message_text("🪙 <b>कृपया अपना USDT नेटवर्क (Network) चुनें:</b>", chat_id=uid, message_id=call.message.message_id, reply_markup=markup, parse_mode="HTML")
+
+    elif call.data.startswith("network_"):
+        parts = call.data.split('_')
+        network, cid = parts[1], parts[2]
+        settings = load_json(SETTINGS_FILE)
+        address = settings.get(f"usdt_{network}_addr", None)
+        qr_file_id = settings.get(f"usdt_{network}_qr", None)
+        
+        bot.delete_message(chat_id=uid, message_id=call.message.message_id)
+        
+        if not address and not qr_file_id:
+            bot.send_message(uid, f"⚠️ Admin ने अभी तक {network.upper()} डिटेल्स सेट नहीं की हैं।", parse_mode="HTML")
+        else:
+            text = f"🪙 <b>USDT ({network.upper()}) Payment Details:</b>\n\n"
+            if address: text += f"<b>Address:</b> <code>{address}</code>\n<i>(Copy Address by clicking on it)</i>\n\n"
+            text += "⚠️ पेमेंट करने के बाद कृपया अपना TxID/Hash और <b>स्क्रीनशॉट</b> यहाँ अपलोड करें।"
+            
+            if qr_file_id: bot.send_photo(uid, photo=qr_file_id, caption=text, parse_mode="HTML")
+            else: bot.send_message(uid, text, parse_mode="HTML")
+
+    elif call.data.startswith("pay_upi_"):
+        settings = load_json(SETTINGS_FILE)
+        upi_id = settings.get("upi", None)
+        upi_qr = settings.get("upi_qr", None)
+        
+        bot.delete_message(chat_id=uid, message_id=call.message.message_id)
+        
+        if not upi_id and not upi_qr:
+            bot.send_message(uid, "⚠️ Admin ने अभी तक UPI डिटेल्स सेट नहीं की हैं।", parse_mode="HTML")
+        else:
+            text = f"🇮🇳 <b>UPI Payment Details:</b>\n\n"
+            if upi_id: text += f"<b>UPI ID:</b> <code>{upi_id}</code>\n<i>(Copy UPI by clicking on it)</i>\n\n"
+            text += "⚠️ पेमेंट करने के बाद कृपया अपना 12-Digit UTR और <b>स्क्रीनशॉट</b> यहाँ अपलोड करें।"
+            
+            if upi_qr: bot.send_photo(uid, photo=upi_qr, caption=text, parse_mode="HTML")
+            else: bot.send_message(uid, text, parse_mode="HTML")
+            
+  
     # 🔥 COURSE PAYMENT APPROVAL
     elif call.data.startswith("app_"):
         parts = call.data.split('_')
