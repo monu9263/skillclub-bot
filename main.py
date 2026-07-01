@@ -487,7 +487,8 @@ def callbacks(call):
     elif call.data == "s_id":
         msg = bot.send_message(uid, "🔍 Enter User ID:")
         bot.register_next_step_handler(msg, search_by_id)
-  elif call.data == "s_name":
+
+    elif call.data == "s_name":
         msg = bot.send_message(uid, "🔍 Enter Name:")
         bot.register_next_step_handler(msg, search_by_name)
 
