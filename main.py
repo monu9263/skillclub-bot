@@ -433,7 +433,7 @@ def callbacks(call):
     
     if call.data.startswith("setlang_"):
         data[uid]["lang"] = call.data.split('_')[1]
-        s ave_json(DB_FILE, data)
+        save_json(DB_FILE, data)
         bot.send_message(uid, "✅ Language Updated!", reply_markup=get_main_menu(uid, data[uid]["lang"]))
     
     elif call.data == "adm_add": 
